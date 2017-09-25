@@ -1,0 +1,68 @@
+jQuery(document).ready(function($) {
+
+	$.noConflict();
+	
+	 //En casoe de IE, ignorar funciones responsive
+	   if(jQuery.browser.msie && parseFloat(jQuery.browser.version) <= 8){
+		   return;
+	   }
+
+	   jQuery.breakpoint({
+           condition: function () {
+               return window.matchMedia('only screen and (max-width:640px)').matches;
+               },
+               enter: function () {
+              	        		   	
+                              	
+       		   	window.oldformErrorHandleClient = MessageHelper.formErrorHandleClient;	
+       		   	MessageHelper.formErrorHandleClient = function(id,errorMessage){
+
+       		     	  jQuery("#" + id).after("<p class='error-responsive'>"+ errorMessage +"</p>");
+       		     	  
+       		     };
+               	
+               },exit:function(){ 
+       			
+               	jQuery(".error-responsive").remove();
+               	
+               	if(window.oldformErrorHandleClient){
+               		MessageHelper.formErrorHandleClient = window.oldformErrorHandleClient;
+               	}
+               	
+               	               	
+               }
+       });	
+	   
+	   if(window.matchMedia('only screen and (max-width:640px)').matches){  
+       	
+       	if(jQuery( "#WC_UserRegistrationAddForm_links_1" ).length > 0){
+       		var _WC_UserRegistrationAddForm_links_1 = jQuery( "#WC_UserRegistrationAddForm_links_1" ).attr('onclick').replace('JavaScript:','JavaScript: Mensaje();');
+
+       		jQuery( "#WC_UserRegistrationAddForm_links_1" ).attr('onclick',_WC_UserRegistrationAddForm_links_1);
+   		
+       	}
+
+        var crea = "Crear cuenta";
+        jQuery('#WC_UserRegistrationAddForm_div_40a .button_container').html(crea);
+       	   		
+       }
+	   
+	   jQuery('.checkmark img').on('touchstart click', function(e){
+	        e.preventDefault();
+	        var idRadio = jQuery(this).parent().children('input').attr('id');
+	        jQuery('#'+idRadio).trigger('click');
+	        if(jQuery(this).parent('.checkmark').hasClass('btn-hover')){
+	            jQuery(this).parent('.checkmark').removeClass('btn-hover');
+	            
+	        }else{
+	             jQuery(this).parent('.checkmark').addClass('btn-hover');
+	             
+	        }
+	        
+	    });
+	   
+});
+
+function Mensaje(){
+	jQuery(".error-responsive").remove();
+}

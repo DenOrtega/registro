@@ -1,0 +1,1067 @@
+$.noConflict();
+
+
+
+jQuery(document).ready(function($) {
+	
+	/*commented for icono_tooltip issue in ie browser
+		//En caso de que no soporte matchmedia ignorara funciones responsives
+		if(!window.matchMedia){
+			return;
+		}
+	*/
+	   //En caso de IE, ignorar funciones responsive
+	   if(jQuery.browser.msie && parseFloat(jQuery.browser.version) <= 8){
+		   return;
+	   }
+	   
+	       /*MTHN: CLICK AND COLLECT - New tooltip for "Tipos de entrega" made by  Miguel.Penaloza*/
+            jQuery('.icono_tooltip').live('click', function() {    
+                jQuery('.icono_tooltip').not(this).removeClass('active');
+                jQuery(this).toggleClass('active');
+            });
+            jQuery('body,html').click(function(){
+               jQuery('.icono_tooltip').removeClass('active'); 
+            });
+
+
+            /*MHTN Defect 473 Problem modal "estado de entrega" */  
+            jQuery('#CloseModal').live('click', function() { 
+                console.log('Dentro');
+                jQuery("#popUpOrderSearch").css( "display", "none" ); 
+            });
+
+          //En caso de que no soporte matchmedia ignorara funciones responsives
+    		if(!window.matchMedia){
+    			return;
+    		}   
+	   alwaysPreviewButton();	   
+       dojo.subscribe("ajaxRequestCompleted", alwaysPreviewButton );
+    
+ 
+		var sizes = function() {
+        if(window.matchMedia('only screen and (max-width: 640px)').matches) {
+
+            /*Agrega Separación del menu*/
+            jQuery('.menuTab').addClass('divRight');
+            jQuery('.open-buscador').addClass('divRight');
+            jQuery('.open-login').addClass('divRight');
+
+            /* START - PAR947 - CATMENU Improvements */
+			/* En version tablet puede quedar desplegado el submenu, por lo que se debe ocultar al principio*/
+			
+			
+			
+	/*Se corrije funcionalidad del menu en mobile By Felipe Vidal */
+			jQuery('.dijitDropDownButton').on('click',function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				jQuery(this).siblings().find('.submenu').slideUp();
+				jQuery(this).find('.submenu').slideToggle();
+			});
+            
+            jQuery('ul.desplegable>li').on('click', function(e) {
+
+                e.preventDefault();
+				e.stopPropagation();
+                jQuery(this).parents().siblings().find('.submenu-subcat').slideUp();
+    			jQuery(this).find('.submenu-subcat').slideToggle();
+            });
+            /* END - PAR947 - CATMENU Improvements */
+            
+			jQuery('ul.desplegable>li a').on('click', function(e) {
+				e.stopPropagation();
+			});
+
+
+			
+		    /*Acordiones carro se cambio para que solo funcionara en 640px */
+		    jQuery('#giftCard_inOut').on('tap',function(e){
+		        e.preventDefault();
+		           if(jQuery(this).hasClass('activoboton')){
+		                jQuery(this).removeClass('activoboton');
+		                jQuery('#giftCard_Target').removeClass('openAcordion');
+		           }else{
+		                jQuery(this).addClass('activoboton');
+		                jQuery('#giftCard_Target').addClass('openAcordion');
+		           }
+		    });
+			
+			jQuery('#novios_inOut').on('tap',function(e){
+		        e.preventDefault();
+		           if(jQuery(this).hasClass('activoboton')){
+		                jQuery(this).removeClass('activoboton');
+		                jQuery('#novios_Target').removeClass('openAcordion');
+		           }else{
+		                jQuery(this).addClass('activoboton');
+		                jQuery('#novios_Target').addClass('openAcordion');
+		           }
+		    });
+		var _options = {
+        			infiniteLoop: true,
+					minSlides:2,
+					maxSlides:2,
+					responsive:true,
+					slideWidth: 195
+				};
+        	
+        	if(!window.homeSliders){
+        		window.homeSliders = [];
+        		
+        		window.homeSliders.push(jQuery('#HomePage4ProductosDestacados .thumbsNode').bxSlider(_options));
+        		window.homeSliders.push(jQuery('#HomePage6ProductosNuevo .thumbsNode').bxSlider(_options));
+        		
+        		//window.homeSliders.push(jQuery('#HomePage6ProductosNuevo .thumbsNode').bxSlider(_options));
+        		//window.homeSliders.push(jQuery('#HomePage4ProductosDestacados .thumbsNode').bxSlider(_options));
+        		
+        		
+        	}else{
+        		for(var i = 0; i < window.homeSliders.length; i++){
+        			window.homeSliders[i].reloadSlider(_options);
+        		}
+        		
+        	}
+
+            /*top category*/
+            var _options2 = {
+                    infiniteLoop: true,
+                    minSlides:2,
+                    maxSlides:2,
+                    responsive:true,
+                    slideWidth: 195
+                };
+            
+            if(!window.CategorySliders){
+                window.CategorySliders = [];
+                window.CategorySliders.push(jQuery('#TopCategory5Ads .thumbsNode').bxSlider(_options2));
+                //window.CategorySliders.push(jQuery('#HomePage6ProductosNuevo .thumbsNode').bxSlider(_options2));
+                
+            }else{
+                for(var i = 0; i < window.CategorySliders.length; i++){
+                    window.CategorySliders[i].reloadSlider(_options2);
+                }
+                
+            }
+
+
+		    
+			
+        }else if(window.matchMedia('only screen and (min-width: 641px) and (max-width: 979px)').matches){
+        	
+        	var _options = {
+        			infiniteLoop: true,
+					minSlides:2,
+					maxSlides:5,
+					responsive:true,
+					slideWidth: 400
+				};
+        	
+        	if(!window.homeSliders){
+        		window.homeSliders = [];
+        		
+        		window.homeSliders.push(jQuery('#HomePage4ProductosDestacados .thumbsNode').bxSlider(_options));
+        		window.homeSliders.push(jQuery('#HomePage6ProductosNuevo .thumbsNode').bxSlider(_options));
+        		
+        	}else{
+        		for(var i = 0; i < window.homeSliders.length; i++){
+        			window.homeSliders[i].reloadSlider(_options);
+        		}
+        		
+        	}
+
+            /*top category*/
+            var _options2 = {
+                    infiniteLoop: true,
+                    minSlides:2,
+                    maxSlides:5,
+                    responsive:true,
+                    slideWidth: 400
+                };
+            
+            if(!window.CategorySliders){
+                window.CategorySliders = [];
+                window.CategorySliders.push(jQuery('#TopCategory5Ads .thumbsNode').bxSlider(_options2));
+                                
+            }else{
+                for(var i = 0; i < window.CategorySliders.length; i++){
+                    window.CategorySliders[i].reloadSlider(_options2);
+                }
+                
+            }
+			
+            
+        }else if(window.matchMedia('only screen and (min-width: 980px)').matches){
+    
+        	//if(isTouch()){
+            if(isTable && isTouch()){    
+        		jQuery('.navPrev, .navNext').hide();
+        		
+        		var _options = {
+	        			infiniteLoop: true,
+						minSlides:2,
+						maxSlides:5,
+						responsive:true
+					};
+        		
+	        	if(!window.homeSliders){
+	        		
+	        		window.homeSliders = [];
+	        		
+	        		window.homeSliders.push(jQuery('#HomePage4ProductosDestacados .thumbsNode').bxSlider(_options));
+	        		window.homeSliders.push(jQuery('#HomePage6ProductosNuevo .thumbsNode').bxSlider(_options));
+	        	}else{
+	        		
+	        		for(var i = 0; i < window.homeSliders.length; i++){
+	        			window.homeSliders[i].reloadSlider(_options);
+	        		}
+	        		
+	    			
+	        	}
+        	}else{
+        		if(window.homeSliders){
+        			for(var i = 0; i < window.homeSliders.length; i++){
+        				window.homeSliders[i].destroySlider()
+        			}
+        		}
+        	}
+
+
+        }
+        
+        function despliegaSubmenu(_this) {
+                var submenu = _this.find('div.submenu');
+                if((jQuery('#header_nav').width() - _this.position().left) < submenu.width()) {
+                    submenu.css('right', '0');
+                }
+                submenu.toggle();
+        }
+    }
+   
+    jQuery(window).resize(function(){
+          /*agregado por jp cerrar menu*/
+/*        jQuery('#Contenedor').removeClass('corredor');
+        jQuery('.menu_responsive').removeClass('absoluta');
+        jQuery('body').removeClass('stop');*/
+        /*fin agregado por cerrar menujp */
+
+        
+    });
+
+/* Manuel fin codigo agregado */   
+
+    	//btn ver mas
+    	if(jQuery('.hiddenRecomendados').length > 0){
+	        jQuery('#btn-promociones').on('tap', function(e){
+	            e.preventDefault();
+	            if(jQuery('.hiddenRecomendados').hasClass('abierto')){
+	                jQuery('.hiddenRecomendados').removeClass('abierto');
+	                jQuery(this).html('Ver +');
+	            }else{
+	                jQuery('.hiddenRecomendados').addClass('abierto');
+	                jQuery(this).html('Ver -');
+	            }	           
+	        });
+    	}else{
+    		jQuery('#btn-promociones').hide();
+    	}
+        
+        
+        //Solo si existen elementos
+    	jQuery('.div-recomendado-item').each(function( index ) {
+    		  if(index >= 3){
+    		    jQuery(this).addClass('hiddenTable');
+    		  }
+    	});
+    	
+    	
+        if(jQuery('.hiddenTable').length > 0){
+	        jQuery('#btn-recomendados').on('touchstart click', function(e){
+	            e.preventDefault();
+	            if(jQuery('.hiddenTable').hasClass('abierto')){
+	                jQuery('.hiddenTable').removeClass('abierto');
+	                jQuery(this).html('Ver +');
+	            }else{
+	                jQuery('.hiddenTable').addClass('abierto');
+	                jQuery(this).html('Ver -');
+	            }	          
+	        });
+        }else{
+        	jQuery('#btn-recomendados').hide();
+        }
+        /*added for 1042*/
+        
+        if(jQuery('.iohiddenTable').length > 0){
+	        jQuery('#btn-recomendados').on('touchstart click', function(e){
+	            e.preventDefault();
+	            if(jQuery('.iohiddenTable').hasClass('abierto')){
+	                jQuery('.iohiddenTable').removeClass('abierto');
+	                jQuery(this).html('Ver +');
+	            }else{
+	                jQuery('.iohiddenTable').addClass('abierto');
+	                jQuery(this).html('Ver -');
+	            }	          
+	        });
+        }else{
+        	jQuery('#btn-recomendados').hide();
+        }
+        /*added for 1042*/
+        
+        
+        
+        
+        
+        if(jQuery('.div-recomendado-item').length == 0){
+        	jQuery('#recomendado-responsive-title').hide();	
+        }
+
+
+
+  
+   /* Acordeon */
+      //TCS: Se quita evento de touchstart para que permita el scroll   
+        jQuery('.titulo_acordeon').on('tap',function(e){
+           
+                e.preventDefault();           
+  
+                var id = jQuery(this).attr('id');
+                if(id == "opciones_despacho_titulo"){
+                        eval(jQuery(this).attr('role'));
+                    }  
+                                  
+               if(jQuery(this).hasClass('activoboton')){
+                    
+                    jQuery(this).removeClass('activoboton');
+                    jQuery('.accordion-container[role='+id+']').removeClass('openAcordion');                   
+                   
+               }else{                    
+
+                     jQuery('.activoboton').each(function( index ) {
+                        jQuery('.accordion-container').removeClass('openAcordion');
+                        jQuery('.titulo_acordeon').removeClass('activoboton');
+                     });
+
+                    jQuery(this).addClass('activoboton');
+                    jQuery('.accordion-container[role='+id+']').addClass('openAcordion');                    
+               }
+            return false
+           
+        });
+
+ 
+    jQuery('#left_nav_title').on('touchstart click', function(e){
+        e.preventDefault();
+        if(jQuery('.left_nav_container').hasClass('displayMenu')){
+            jQuery('.left_nav_container').removeClass('displayMenu');
+        }else{
+            jQuery('.left_nav_container').addClass('displayMenu');
+        }
+    });
+   
+    //elementos de reemplazo
+    //pago .RadioPayRemplazo
+    jQuery('.RadioPayRemplazo').on('touchstart click', function(e){
+        e.preventDefault();
+        var idRadio = jQuery(this).attr('href');
+        jQuery(idRadio).trigger('click');
+        if(jQuery(this).hasClass('marcado')){
+            jQuery('.RadioPayRemplazo').removeClass('marcado');
+        }else{
+            jQuery('.RadioPayRemplazo').removeClass('marcado');
+            jQuery(this).addClass('marcado');
+        }
+
+    });
+	//REQ:1019 
+	jQuery('#SimpleSearchForm_SearchTerm').on('click', function(e){
+		e.preventDefault();
+		if( window.matchMedia ) {
+			if(window.matchMedia('only screen and (max-width: 667px) and (orientation : portrait) ').matches){
+				jQuery('.slide').addClass('grayOut');
+				jQuery('.slide').attr('contenteditable','false');
+				jQuery('#page').addClass('grayOut');
+				jQuery('#page').attr('contenteditable','false');
+			}else if(window.matchMedia('only screen and (max-width: 780px) and (orientation : landscape) ').matches){
+				jQuery('.slide').addClass('grayOut');
+				jQuery('.slide').attr('contenteditable','false');
+				jQuery('#page').addClass('grayOut');
+				jQuery('#page').attr('contenteditable','false');
+			}
+		
+		}
+	});
+	
+	jQuery('#SimpleSearchForm_SearchTerm').on('focus', function(e){
+		e.preventDefault();
+	
+		//Galaxy Buscar Issue
+		if( (navigator.userAgent.match(/Android/i)) || (navigator.userAgent.match(/iPhone/i)) && window.matchMedia('only screen and (max-width: 670px) and (orientation : portrait) ').matches ){
+			 document.getElementById('buscador-responsive').style.position="fixed";
+		}
+		else {
+			document.getElementById('buscador-responsive').style.marginTop="0px";
+		}
+	});
+	
+	jQuery('#SimpleSearchForm_SearchTerm').on('blur', function(e){
+		e.preventDefault();
+	
+		//Galaxy Buscar Issue
+		if( (navigator.userAgent.match(/Android/i)) || (navigator.userAgent.match(/iPhone/i)) && window.matchMedia('only screen and (max-width: 670px) and (orientation : portrait) ').matches ){
+			 document.getElementById('buscador-responsive').style.position="";
+		}
+		else {
+			document.getElementById('buscador-responsive').style.marginTop="0px";
+		}
+	});
+	
+	jQuery('#mfp-close_loginHeader').on('click',function(e){
+		var magnificPopup = $.magnificPopup.instance; // save instance in magnificPopup variable
+
+//REQ:1019
+		magnificPopup.close();
+		document.getElementsByClassName('white-popup')[0].style.display="block";
+		
+	});
+	
+	
+	
+ 
+    jQuery('.menu a').click(function(e) {
+        if (jQuery(this).parent().find('ul')) {
+            e.preventDefault();
+            jQuery(this).parent().find('ul').toggleClass('active');
+            jQuery(this).parent().parent().find('li.active').toggleClass('active');
+            jQuery(this).parent().toggleClass('active');
+        }
+    });
+	
+	
+
+    jQuery('.menuTab').on('tap',function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if(jQuery('#Contenedor').hasClass('corredor')){
+                jQuery('#Contenedor').removeClass('corredor');
+                jQuery('.menu_responsive').removeClass('absoluta');
+           	 jQuery('.contenedor-responsive').addClass('homePage');
+	         jQuery('body').removeClass('stop');
+				jQuery('#dinamic_menu').removeClass('menu_activo'); /* PAR947 - CATMENU Improvements */
+				jQuery('#menu-externo').hide();
+				jQuery('#cubrefondo').removeClass('cubre_on'); /* PAR947 - CATMENU Improvements */
+        }else{
+            jQuery('#Contenedor').addClass('corredor');
+            jQuery('.menu_responsive').addClass('absoluta');
+            //jQuery('.contenedor-responsive').addClass('absoluta');
+	     jQuery('.contenedor-responsive').removeClass('homePage');
+	     jQuery('.contenedor-responsive').style.position='absolute';
+            jQuery('body').addClass('stop').scrollTop(0);
+            jQuery('html').scrollTop(0);
+			
+            jQuery('#menu-externo').show();
+			jQuery('#cubrefondo').addClass('cubre_on'); /* PAR947 - CATMENU Improvements */
+			jQuery('#dinamic_menu').addClass('menu_activo'); /* PAR947 - CATMENU Improvements */
+        }
+        return false;
+        /*jQuery('.menu').toggleClass('active');
+        jQuery('.menu li').removeClass('active');*/
+	
+    });
+	
+    /* PAR947 - CATMENU Improvements */
+    jQuery('.menuSwipe').on('swipeleft',function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if(jQuery('#Contenedor').hasClass('corredor')){
+                jQuery('#Contenedor').removeClass('corredor');
+                jQuery('.menu_responsive').removeClass('absoluta');
+                jQuery('body').removeClass('stop');
+				
+				jQuery('#dinamic_menu').removeClass('menu_activo');
+				jQuery('#menu-externo').hide();
+				jQuery('#cubrefondo').removeClass('cubre_on');
+        }else{
+            jQuery('#Contenedor').addClass('corredor');
+            jQuery('.menu_responsive').addClass('absoluta');
+            jQuery('body').addClass('stop').scrollTop(0);
+            jQuery('html').scrollTop(0);
+			
+            jQuery('#menu-externo').show();
+			jQuery('#cubrefondo').addClass('cubre_on');
+			jQuery('#dinamic_menu').addClass('menu_activo');
+        }
+        return false;
+    });
+	
+    //buscar por
+    jQuery('#left_nav_title').on('touchstart click', function(e){
+        e.preventDefault();
+        if(jQuery(this).hasClass('openleft')){
+            jQuery(this).removeClass('openleft');
+            jQuery('#left_nav_title .signal').html('+');
+        }else{
+            jQuery(this).addClass('openleft');
+            jQuery('#left_nav_title .signal').html('-');
+        }
+    });
+
+   
+jQuery.breakpoint({
+                condition: function () {
+                    return window.matchMedia('only screen and (max-width:640px)').matches;
+                },
+                enter: function () {
+    
+                /**OPEN FILTRO BUSCARPOR MOBILE**/
+//                jQuery('.left_sidebar_header_container').on('tap', function(e){
+//                    e.preventDefault();
+//                    var elemChild = jQuery(this);
+//                    if(!elemChild.hasClass('abriendo')){
+//
+//                        /* Funcionalidad Acordeon permite mostrar solo uno elemento simultanieo */
+//                        jQuery('.abriendo').each(function( index ) {   
+//                            jQuery('.left_sidebar_header_container').addClass('cerrando');
+//                            jQuery('.left_sidebar_header_container').removeClass('abriendo');
+//                            jQuery('.left_sidebar_header').addClass('left_sidebar_header_closed');
+//                            jQuery('.left_sidebar_header_closed').removeClass('left_sidebar_header');
+//                            jQuery('.signal').html('+');   
+//                            jQuery("#brand_categories").css({ 'display': "none" });
+//                            jQuery("#price_categories").css({ 'display': "none" });
+//                            jQuery(".Movile").css({ 'display': "none" });               
+//
+//                        });
+//
+//
+//                        elemChild.removeClass('cerrando').addClass('abriendo');
+//                        elemChild.children('.signal').html('-');
+//                        elemChild.next().show();
+//                    }else{
+//                        elemChild.removeClass('abriendo').addClass('cerrando');
+//                        elemChild.children('.signal').html('+');
+//                        elemChild.next().hide();
+//                    }
+//                });
+
+                       
+                    jQuery('#left_nav_title ').on('tap', function(e){                        
+                        jQuery(".titulo-categoria").css({ 'display': "none" });
+                        jQuery("#brand_categories").css({ 'display': "none" });
+                        jQuery("#price_categories").css({ 'display': "none" });                      
+                    });    
+
+                	jQuery('.left_sidebar_header_container').on('tap', function(e){
+                        e.preventDefault();
+                    var IdDiv = '';
+                    var correlativo = '';   
+                    var id = jQuery(this).attr('id');
+                    correlativo = id.replace(/[^\d]/g, '');
+                    if(correlativo){IdDiv = '#normal_categories_' + correlativo;}  
+
+                    jQuery('.Muestra').each(
+                        function(index){
+                            var id2 = jQuery(this).attr('id');                            
+                            jQuery('#'+id2).css({ 'display': "none" });
+                            jQuery('#'+id2).removeClass('Muestra');                           
+                        }
+                    );
+
+                    jQuery('.abriendo').each(
+                        function(index){
+                            jQuery('#left_nav .signal').html('+');
+                            var id3 = jQuery(this).attr('id');
+                            if(id3 != id){console.log(id);                     
+                                jQuery('#'+id3).removeClass('abriendo').addClass('cerrando');
+                            }
+                        }
+                    );
+
+                    
+ 
+                    if(!jQuery(this).hasClass('abriendo')){    
+           
+                        /*jQuery('.signal').html('+');
+                        jQuery(".wipe").css({ 'display': "none" });
+                        jQuery('.left_sidebar_header_container').addClass('cerrando');
+                        jQuery('.left_sidebar_header_container').removeClass('abriendo');*/           
+                        jQuery("#brand_categories").css({ 'display': "none" });
+                        jQuery("#price_categories").css({ 'display': "none" });
+                        jQuery("#category_categories").css({ 'display': "none" });                        
+                        jQuery(this).removeClass('cerrando').addClass('abriendo');
+                        jQuery(this).children('.signal').html('-');
+                        
+
+                        if(id == 'category_header'){
+                            setTimeout(function(){ 
+                                jQuery("#category_categories").css({ 'display': "block" });
+                                jQuery("#category_categories").removeClass('no-mobile');                                 
+                               
+                            },600);
+                        }
+
+                        if(id == 'brand_header'){
+                            setTimeout(function(){ 
+                                jQuery("#brand_categories").css({ 'display': "block" });
+                            },600);
+                        }
+
+                        if(id == 'price_header'){
+                            setTimeout(function(){ 
+                                jQuery("#price_categories").css({ 'display': "block" });
+                            },600);
+                        }
+                        if(IdDiv){              
+                            setTimeout(function(){ 
+                                jQuery(IdDiv).css({ 'display': "block" });  
+                                jQuery(IdDiv).addClass('Muestra');                               
+                            },600);
+                        }
+
+
+                    }else{
+           
+                        jQuery(this).removeClass('abriendo').addClass('cerrando');
+                        jQuery(this).children('.signal').html('+');
+              
+                        if(IdDiv){              
+                            setTimeout(function(){ 
+                                jQuery(IdDiv).css({ 'display': "none" }); 
+                                jQuery(IdDiv).removeClass('Muestra'); 
+                            },200);
+                        }
+
+                        if(id == 'category_header'){
+                            setTimeout(function(){ 
+                                jQuery("#category_categories").css({ 'display': "none" });
+                            },500);
+                        }           
+                        if(id == 'brand_header'){
+                            setTimeout(function(){ 
+                                jQuery("#brand_categories").css({ 'display': "none" });
+                            },500);
+                        }
+
+                        if(id == 'price_header'){
+                            setTimeout(function(){ 
+                                jQuery("#price_categories").css({ 'display': "none" });
+                            },500);
+                        }
+           
+                    }       
+      
+  });
+
+
+            },exit:function(){ 
+
+            }
+        });             
+    
+   
+    /* Actualizo para resolver problema de busqueda en menu responsive*/
+    /*jQuery("#stiky").hcSticky();*/
+
+
+    /*menu de JQUERY*/
+    
+    jQuery('.open-buscador').on('click', function(e){
+        e.preventDefault();
+        var alto= jQuery('.contenedor-responsive').height();
+        var id = jQuery(this).attr('href');
+        if(jQuery(id).hasClass('desplegado')){
+            jQuery(id).removeClass('desplegado');
+            jQuery(".contenedor-responsive").addClass('desplegado').show(); /* PAR946 - SEARCHBOX Improvements */
+        }else{
+        	jQuery(".responsive-popup-menu").removeClass('desplegado').hide();
+            jQuery(id).addClass('desplegado').show();
+            jQuery(".contenedor-responsive").addClass('desplegado').hide(); /* PAR946 - SEARCHBOX Improvements */
+            jQuery("#header").addClass('desplegado').hide(); /* PAR946 - SEARCHBOX Improvements */
+            jQuery("#cerrar_buscador").css({ 'display': "block" }); /* PAR946 - SEARCHBOX Improvements */
+            jQuery(id).focus();
+
+        }
+    });
+    
+    /* PAR946 - SEARCHBOX Improvements */
+    jQuery('.cerrar-buscador').on('click',function(e){
+        e.preventDefault();
+        jQuery(".contenedor-responsive").removeClass('desplegado').hide();
+   	 jQuery(".contenedor-responsive").addClass('desplegado').show();
+   	 jQuery("#header").removeClass('desplegado').hide();
+   	 jQuery("#header").addClass('desplegado').show();
+   	 jQuery('#buscador-responsive').removeClass('desplegado').hide;
+   	 jQuery("#cerrar_buscador").css({ 'display': "none" });
+    });
+    
+    jQuery('.open-login').on('click', function(e){
+        e.preventDefault();
+        var alto = jQuery('.contenedor-responsive').height();
+        
+        var id = "#login-box";
+        
+        if(jQuery("#LogonFormModal").length == 0){
+        	id = "#login-box-logged";
+        	var username = jQuery("#responsive-username").val();        	
+        	var href = jQuery("#headerLogout").attr("href");
+        	jQuery("#responsive-popup-menu-logoff").attr("href", href);        	
+			//REQ:1019	
+			if(username.length > 15){
+        		username = username.substring(0,15);
+        	}
+        	jQuery("#responsive-popup-menu-username").html(username);
+        }
+        if(jQuery(id).hasClass('desplegado')){
+            jQuery(id).removeClass('desplegado').hide();
+//REQ:1019
+            jQuery("#buscador-responsive").show();
+        }else{
+        	jQuery(".responsive-popup-menu").removeClass('desplegado').hide();
+            jQuery(id).addClass('desplegado').show();
+        }
+    });
+    
+  //actualizados globo de menu
+        
+    if(jQuery("#saludo-responsive").length > 0){
+        jQuery('.actualizado').addClass('showglobe');
+        if(jQuery("#responsive-username").val()){
+        	jQuery('.actualizado').html('Hola ' + jQuery("#responsive-username").val());
+            setTimeout( function(){
+                jQuery('.actualizado').removeClass('showglobe')
+            } , 6000 );
+        }
+        
+
+       
+    	
+    }
+     
+
+
+      
+
+    /*Boton scrollTop*/
+    jQuery('.btn-up').on('click', function(){
+        e.preventDefault();
+        jQuery('body').animate({scrollTo: 0}, 500, 'swing');
+    });
+
+    
+
+/* agreaga carro */
+    jQuery('input.sv_radio').on('click',function(){
+    	
+      	 var _radio = jQuery(this);
+           var idRadio = _radio.attr('id');
+           
+          if(_radio.is(':checked')){
+        	 _radio.parent().addClass('incluido');
+             _radio.siblings("span").addClass('incluido');
+          	 _radio.siblings("span").html('Ya esta incluido');
+          }else{
+        	_radio.parent().removeClass('incluido');
+            _radio.siblings("span").removeClass('incluido');
+          	_radio.siblings("span").html('Incluir en el carro');
+          	
+          }
+      });
+        
+        //Funciones breakpoint
+        $.breakpoint({
+        condition: function () {
+            return window.matchMedia('only screen and (max-width:640px)').matches;
+            },
+            enter: function () {
+            	
+            	//TCS: Se agrega para mover el cuadro de disponibilidad de articulos
+            	jQuery('.qty_remaining>span').appendTo( jQuery('#responsive-inventory') );
+            	
+                //MHTN: CLICK AND COLLECT change view for popup traking mobile
+            	jQuery("#DespachoWidgetHidden_sup>div").appendTo(jQuery("#contenedor-despacho"));
+                jQuery("#Modal_PDP_RT>div").appendTo(jQuery("#contenedor-despacho2"));
+                jQuery("#DespachoWidgetHidden_CE>div").appendTo(jQuery("#contenedor-despacho3"));
+            
+
+                //MHTN: CLICK AND COLLECT action for click in button "Despacho"  and "Retiro" mobile made by Miguel Penaloza
+                jQuery('#despacho_d2').on('touchstart click', function(e){
+                    e.preventDefault();
+                    jQuery('#contenedor-despacho2').addClass('ocultar');
+                    jQuery('#contenedor-despacho').removeClass('ocultar');
+                    jQuery('#contenedor-despacho3').addClass('ocultar');
+                });
+
+                jQuery('#retiro_t').on('touchstart click', function(e){
+                    e.preventDefault();
+                    jQuery('#contenedor-despacho').addClass('ocultar');
+                    jQuery('#contenedor-despacho2').removeClass('ocultar');
+                    jQuery('#contenedor-despacho3').addClass('ocultar');
+                });
+                
+                jQuery('#retiro_t2').on('touchstart click', function(e){
+                    e.preventDefault();
+                    jQuery('#contenedor-despacho').addClass('ocultar');
+                    jQuery('#contenedor-despacho2').removeClass('ocultar');
+                    jQuery('#contenedor-despacho3').addClass('ocultar');
+                });
+                
+                jQuery('#chileExp_t').on('touchstart click', function(e){
+                    e.preventDefault();
+                    jQuery('#contenedor-despacho').addClass('ocultar');
+                    jQuery('#contenedor-despacho2').addClass('ocultar');
+                    jQuery('#contenedor-despacho3').removeClass('ocultar');
+                });
+                
+                jQuery('#despacho_d3').on('touchstart click', function(e){
+                    e.preventDefault();
+                    jQuery('#contenedor-despacho2').addClass('ocultar');
+                    jQuery('#contenedor-despacho').removeClass('ocultar');
+                    jQuery('#contenedor-despacho3').addClass('ocultar');
+                });
+                
+                jQuery('#chileExp_t2').on('touchstart click', function(e){
+                    e.preventDefault();
+                    jQuery('#contenedor-despacho').addClass('ocultar');
+                    jQuery('#contenedor-despacho2').addClass('ocultar');
+                    jQuery('#contenedor-despacho3').removeClass('ocultar');
+                });
+                
+                jQuery('#retiro_t3').on('touchstart click', function(e){
+                    e.preventDefault();
+                    jQuery('#contenedor-despacho').addClass('ocultar');
+                    jQuery('#contenedor-despacho2').removeClass('ocultar');
+                    jQuery('#contenedor-despacho3').addClass('ocultar');
+                });
+
+
+            	
+            	//MHTN: Start Req INT1829 : Shipping calculator
+		//The previous logic here it was removed
+		//MHTN: END Req INT1829 : Shipping calculator
+
+            	
+                jQuery("#left_nav_title").html("Filtrar por <span class='no-desktop signal'> + </span>");
+                sizes();
+                jQuery('#header_menu_responsive').appendTo( "#menu-externo" );
+                
+                jQuery('#catalog_link').appendTo('#titulo-receptor');
+                jQuery('form[name="CatalogSearchForm"]').appendTo('#buscador-responsive');
+                var timer;
+                jQuery( window ).on('scroll', function() {
+                        jQuery('.btn-up').addClass('showBtn');
+                        clearTimeout(timer);
+                        timer = setTimeout( refresh , 2000 );
+                });
+                function refresh(){
+                    jQuery('.btn-up').removeClass('showBtn')
+                }
+                jQuery('.primary_button').removeAttr('style');
+                jQuery('.texto-codigo-novios').removeAttr('style');
+                
+                jQuery('#caluga-tarjetas a').appendTo( "#caluga-larga-mobile" );
+                
+                jQuery('#calugas-a .calugas-chicas').each(
+                		function(index){
+                			if(index >= 2){
+                				jQuery(this).appendTo( "#ver-mas-calugas" );
+                			}
+                		}
+                );
+                
+                
+               
+             
+            },exit:function(){
+            	
+            	//TCS: Se agrega para mover el cuadro de disponibilidad de articulos
+            	jQuery('#responsive-inventory>span').appendTo(jQuery('.qty_remaining'));
+
+                //MHTN: CLICK AND COLLECT restore view popoup traking for desktop             	
+            	jQuery("#contenedor-despacho>div").appendTo(jQuery("#DespachoWidgetHidden_sup"));
+                jQuery("#contenedor-despacho2>div").appendTo(jQuery( "#Modal_PDP_RT"));
+                jQuery("#contenedor-despacho3>div").appendTo(jQuery( "#DespachoWidgetHidden_CE"));
+
+            	
+		//MHTN: Start Req INT1829 : Shipping calculator
+		//The previous logic here it was removed
+		//MHTN: END Req INT1829 : Shipping calculator
+            	
+            	
+            	jQuery("#left_nav_title").html("Buscar por <span class='no-desktop signal'> + </span>"); 
+                jQuery('#header_menu_dropdown').appendTo( "#header_nav" );
+                jQuery('#catalog_link').appendTo('#titulo-transmisor'); 
+                jQuery('form[name="CatalogSearchForm"]').appendTo('#contieneBuscador');
+                jQuery('.boxCheck').remove();
+                jQuery('.primary_button').attr('style', 'margin: 46px 0px 0px -215px !important;');
+                jQuery('.texto-codigo-novios').attr('style', 'width:500px');
+                
+                jQuery('#ver-mas-calugas .calugas-chicas').appendTo( "#calugas-a" );
+                jQuery('#caluga-larga-mobile a').appendTo( "#caluga-tarjetas" );
+                jQuery('#caluga-tarjetas').appendTo( "#calugas-a" );
+            }
+        });
+		
+		$.breakpoint({
+        condition: function () {
+            return window.matchMedia('only screen and (min-width: 641px) and (max-width: 979px)').matches;
+            },
+            enter: function () {
+				jQuery('.dijitDropDownButton').unbind();
+				jQuery('.dijitDropDownButton div div > span').unbind();
+					sizes();
+            },exit:function(){
+
+                //
+                
+            }
+        });
+		
+		$.breakpoint({
+        condition: function () {
+            return window.matchMedia('only screen and (min-width:980px)').matches;
+            },
+            enter: function () {
+				jQuery('.dijitDropDownButton').unbind();
+					sizes();
+            },exit:function(){
+
+                //
+                
+            }
+        });
+
+        //open-popups
+        jQuery('.open-comentarios').magnificPopup({
+            type: 'inline'
+        });
+        
+        jQuery('#responsive-menu-inicio').magnificPopup({
+            type: 'inline',
+            disableOn: function() {
+        	 //TCS disable en caso de que ya este logueado
+           	  return (jQuery("#LogonFormModal").length > 0);
+            }
+        });
+        
+        
+        jQuery('.btnErrorGiftCard').magnificPopup({
+            type: 'inline'
+        });
+        
+        
+       
+        
+
+        
+  });
+    
+
+
+/**
+ * if the screen is touch and table width always display preview button for products
+ */
+function alwaysPreviewButton(){
+   var isTable = window.matchMedia("only screen and (min-width: 760px)").matches;
+   if(isTable && isTouch()){
+	   //show preview button always
+	   jQuery("a[onfocus^='showPopup']").each(
+			   function(index, obj){
+			    $obj = jQuery(obj);
+			    eval($obj.attr('onfocus')); 
+			    }
+			 );
+
+	   window.hidePopupButton = function(id){
+		   	//ignore the hide function
+	   };
+		
+   }
+}
+
+function isTouch(){
+	return window.ontouchstart !== undefined;	
+}
+
+//Format RUT
+function formatoRut(RutOj)
+{
+    var texto    = RutOj.value;
+    var valortem = "";  
+    if (!(texto))
+        {
+            return true;
+        }   
+
+    for ( i=0; i < texto.length ; i++ )
+        {
+            if ( texto.charAt(i) != ' ' && texto.charAt(i) != '.' && texto.charAt(i) != '-' )
+                {
+                    valortem = valortem + texto.charAt(i);
+                }
+        }
+        
+    texto = valortem;
+    largo = texto.length;
+
+    if ( largo < 2 )
+        {
+            return false;
+        }
+    for (i=0; i < largo ; i++ )
+        { 
+            if ( texto.charAt(i) !="0" && texto.charAt(i) != "1" && texto.charAt(i) !="2" && texto.charAt(i) != "3" && texto.charAt(i) != "4" && texto.charAt(i) !="5" && texto.charAt(i) != "6" && texto.charAt(i) != "7" && texto.charAt(i) !="8" && texto.charAt(i) != "9" && texto.charAt(i) !="k" && texto.charAt(i) != "K" ) 
+                {
+                    return false;
+                }
+        }
+    var ValorInvertido = "";
+    for ( i=(largo-1),j=0; i>=0; i--,j++ )
+    {
+        ValorInvertido = ValorInvertido + texto.charAt(i);
+    }
+  
+    var CharText = "";
+    CharText = CharText + ValorInvertido.charAt(0);
+    CharText = CharText + '-';
+    counter = 0;
+
+    for ( i=1,j=2; i<largo; i++,j++ )
+    {
+        if ( counter == 3 )
+        {
+            CharText = CharText + '.';
+            j++;
+            CharText = CharText + ValorInvertido.charAt(i);
+            counter = 1;
+        }
+        else
+        { 
+            CharText = CharText + ValorInvertido.charAt(i);
+            counter++;
+        }
+    }
+
+    ValorInvertido = "";
+    for ( i=(CharText.length-1),j=0; i>=0; i--,j++ )
+    {
+        ValorInvertido = ValorInvertido + CharText.charAt(i);
+    }
+
+    RutOj.value = ValorInvertido;
+    return false;
+}
+function soloRut(e){
+       key = e.keyCode || e.which;
+       tecla = String.fromCharCode(key).toLowerCase();
+       letras = " 1234567890-k.";
+       especiales = "8-37-39-46";
+
+       tecla_especial = false
+       for(var i in especiales){
+            if(key == especiales[i]){
+                tecla_especial = true;
+                break;
+            }
+        }
+
+        if(letras.indexOf(tecla)==-1 && !tecla_especial){
+            return false;
+        }
+}

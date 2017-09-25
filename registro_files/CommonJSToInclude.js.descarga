@@ -1,0 +1,3003 @@
+
+dojo.addOnLoad(function(){
+	dojo.require("dojo.cookie");
+});
+
+function limitText(theField, maxLen) 
+{
+	if (theField.value.length > maxLen) 
+	{
+		theField.value = theField.value.substring(0, maxLen);
+	}
+}
+
+function clearAllGift()
+{
+	document.getElementById("gift_greeting_text").value='';
+	document.getElementById("gift_sender_text").value='';
+	document.getElementById("gift_sender_text").disabled='disabled';
+	document.getElementById("gift_sender_yn").checked=false;
+	document.getElementById("gift_wrap_yn").checked=false;
+}
+
+function onGiftSenderChange(cb)
+{
+	document.getElementById('gift_sender_text').value='';
+	if (cb.checked == true)
+	{
+		document.getElementById("gift_sender_text").disabled='';
+	}
+	else
+	{
+		document.getElementById("gift_sender_text").disabled='disabled';
+	}
+}
+
+function submitNoviosForm(formElement,clicked_Id,billingPage,event,v_refreshUrl,externalId) {
+	var params = [];
+	params.billingPage=(billingPage!=null&&billingPage!='undefined')?billingPage:false;
+	var fromPage = dojo.byId("sourcePage").value;
+	params.sourcePage = fromPage;
+	if(clicked_Id == "submitSearch1") {
+		//var novoiceRadios = dojo.query('.novios_select');
+		//var index =  dojo.indexOf(novoiceRadios, dojo.query('.novios_select:checked')[0]);
+		//params.codigo = dojo.byId('tempValueInput_'+(index+1)).value;
+		
+		/*
+		 * START: CEN REQ : 476 - change of noios UI.
+		 */
+		params.codigo = externalId;
+		/*
+		 * START: CenReqNum#167 Added Below if condition, to pass novios points when the user selects novios address from pago page.
+		 */
+		if(billingPage != '' && billingPage == true) {
+			formElement.forPointsNovios.value = "12345";
+			params.forPointsNovios = formElement.forPointsNovios.value;
+		}
+		
+		if((params.codigo!="") && (params.codigo != undefined)){
+			if((params.codigo).length<8){
+				for(var i=(params.codigo).length;i<8;i++){
+					params.codigo='0'+params.codigo;
+				}
+			}
+		}
+		
+		params.forRegistryFlag = formElement.forRegistryFlag.value;
+		params.orderId = formElement.orderId.value;
+		params.v_refreshUrl=v_refreshUrl;
+		submitRequest();
+		//cursor_wait();
+		//Start Req.791
+        if(fromPage !='CheckoutAddressDetails' && "undefined" != typeof(req791ShowCursorWaitDespachoPage)){
+      	  req791ShowCursorWaitDespachoPage();
+        }
+        //End Req.791
+		wc.service.invoke("AjaxNoviosSection", params);
+		
+	} else if(clicked_Id == "codigoModel" && (event.keyCode == 13 || event == '')) {
+		params.codigo = formElement.codigo.value;
+		if((formElement.codigo.value != null) && (trim(formElement.codigo.value)!=""))
+		{
+			params.codigo = formElement.codigo.value;
+			formElement.forPointsNovios.value = "12345";
+			params.forPointsNovios = formElement.forPointsNovios.value;
+			console.debug("seteo formElement.forPointsNovios.value : "  + formElement.forPointsNovios.value);
+			
+			if((params.codigo!="") && (params.codigo != undefined)){
+				if((params.codigo).length<8){
+					for(var i=(params.codigo).length;i<8;i++){
+						params.codigo='0'+params.codigo;
+					}
+				}
+			}
+			
+			params.forRegistryFlag = formElement.forRegistryFlag.value;
+			params.orderId = formElement.orderId.value;
+			submitRequest();
+			cursor_wait();
+			wc.service.invoke("AjaxNoviosSection", params);
+		}else{
+			MessageHelper.formErrorHandleClient("codigo", MessageHelper.messages["ERROR_codigoModelEmpty"]);
+			return;
+		}
+		
+	}
+	 else if(clicked_Id == "EmptyCodigoModel") {
+		params.forRegistryFlag = formElement.forRegistryFlag.value;
+		params.orderId = formElement.orderId.value;
+		submitRequest();
+		cursor_wait();
+		wc.service.invoke("AjaxNoviosSection", params);
+	}
+	
+}
+
+/**
+ * 
+ */
+wc.service.declare({
+	id: "AjaxNoviosSection",
+	actionId: "AjaxNoviosSection",
+	url: getAbsoluteURL() + "CENNoviosCodeUpdateCmd",
+	formId: ""
+
+	/**
+	 * Clear messages on the page.
+	 * @param (object) serviceResponse The service response object, which is the JSON object returned by the service invocation
+	 */
+	,successHandler: function(serviceResponse) {
+		if(true!=serviceResponse.billingPage || serviceResponse.sourcePage=='ShippingDetailsDisplay' || serviceResponse.sourcePage=='OrderBillingShippingDetails'
+			|| serviceResponse.sourcePage=='CheckoutAddressDetails'){
+		/*if (window.location.search.indexOf("showShipAddressSelect=true") != -1) {
+			window.location.search = window.location.search.replace("showShipAddressSelect=true", "showShipAddressSelect=false");
+		} else {
+			window.location.reload();
+		}*/
+			var codigoNovios = serviceResponse.codigo[0];
+			if((codigoNovios!="") && (codigoNovios != undefined)){
+				if((codigoNovios).length<8){
+					for(var i=(codigoNovios).length;i<8;i++){
+						codigoNovios='0'+codigoNovios;
+					}
+				}
+			}
+			/* CEN REQ 444 - Checkout Flow Change*/
+			if(AddressHelper.checkoutNovios){
+				wc.render.getRefreshControllerById('noviosAddressDisplayAreaController').url = serviceResponse.v_refreshUrl[0]; 
+				wc.render.updateContext('noviosAddressContext',{'checkoutAddress':true,'orderId':serviceResponse.orderId[0]});
+				GRCommonUtilsJS.hideNoviosModal();
+				AddressHelper.noviosChanged = false;
+			}else{
+				wc.render.getRefreshControllerById('shippingAdddressDisplayAreaController').url = serviceResponse.v_refreshUrl[0]; 
+				wc.render.updateContext('shippingAddressContext',{'codigo':codigoNovios,'orderId':serviceResponse.orderId[0]});
+				//Req : 1108 commenting the code to avoid multiple calls of OrderItemAddressShipMethodUpdate during novios call
+				//CheckoutHelperJS.displayAddressDetails(-3,'Shipping'); 
+				
+				CheckoutHelperJS.updateAddressForAllItems(codigoNovios);
+				GRCommonUtilsJS.hideNoviosModal();
+				if(typeof(ShippingCommonUtilsJS) != "undefined" && ShippingCommonUtilsJS.refreshShipping == false){
+					ShippingCommonUtilsJS.hideProgramaDespacho(true);
+				}
+			}
+			cursor_clear();
+		}else{
+			GRCommonUtilsJS.hideNoviosModal();
+	cursor_clear();
+		}
+	}
+	
+	/**
+	 * Displays an error message on the page if the request failed.
+	 * @param (object) serviceResponse The service response object, which is the JSON object returned by the service invocation.
+	 */
+	,failureHandler: function(serviceResponse) {
+		if(serviceResponse.errorMessageKey == '_ERR_CMD_INVALID_PARAM'){
+			//MessageHelper.displayErrorMessage(MessageHelper.messages["ERROR_INVALID_NOVIOS_CODE"]);
+			MessageHelper.formErrorHandleClient("codigo", MessageHelper.messages["ERROR_INVALID_NOVIOS_CODE"]);
+		}
+		else if(serviceResponse.errorMessageKey == '_ERR_CAT_NOT_EXISTING'){
+			//MessageHelper.displayErrorMessage(MessageHelper.messages["ERROR_EXPIRED_NOVIOS_CODE"]);
+			MessageHelper.formErrorHandleClient("codigo", MessageHelper.messages["ERROR_EXPIRED_NOVIOS_CODE"]);
+		}else{
+			//MessageHelper.displayErrorMessage(MessageHelper.messages["ERROR_codigoModelEmpty"]);
+			MessageHelper.formErrorHandleClient("codigo", MessageHelper.messages["ERROR_codigoModelEmpty"]);
+		}
+		cursor_clear();
+	}
+		
+})
+
+function submitGiftCodeForm(formElement) {
+	if(validateGiftcardForm()) {
+		var params = [];
+		params.giftCardNumber = formElement.giftCardNumber.value;
+		params.orderId = formElement.orderId.value;
+		params.password = formElement.password.value;
+		params.checkAction = "applyGiftCard";
+		params.TRUT = formElement.TRUT.value;
+		
+		submitRequest();
+		cursor_wait();
+		
+		wc.service.invoke("AjaxGiftCardSection", params);
+	}
+}
+
+function checkGiftCardBalance(formElement){
+	if(validateGiftcardForm()) {
+		var params = [];
+		params.giftCardNumber = formElement.giftCardNumber.value;
+		params.orderId = formElement.orderId.value;
+		params.password = formElement.password.value;
+		params.checkAction = "checkGiftCardBalance";
+		params.TRUT = formElement.TRUT.value;
+		
+		submitRequest();
+		cursor_wait();
+		
+		wc.service.invoke("AjaxGiftCardSection", params);
+	}
+}
+
+/**
+ * This service invokes ApplyGiftCard command.
+ */
+
+wc.service.declare({
+      id: "AjaxGiftCardSection",
+      actionId: "AjaxGiftCardSection",
+      url: getAbsoluteURL() + "ApplyGiftCardCmd",
+      formId: ""
+
+      /**
+       * Clear messages on the page.
+       * @param (object) serviceResponse The service response object, which is the JSON object returned by the service invocation
+       */
+      ,successHandler: function(serviceResponse) {}
+      
+      /**
+       * Displays an error message on the page if the request failed.
+       * @param (object) serviceResponse The service response object, which is the JSON object returned by the service invocation.
+       */
+      ,failureHandler: function(serviceResponse) {
+    	  if(serviceResponse){
+    		  if(serviceResponse.exceptionData){
+    			  MessageHelper.displayErrorMessage(MessageHelper.messages[serviceResponse.exceptionData.errorReason]);
+    		  }else{
+    			  if (serviceResponse.errorMessage) {
+    				  MessageHelper.displayErrorMessage(serviceResponse.errorMessage);
+    			  }else {
+    				  if (serviceResponse.errorMessageKey) {
+    					  MessageHelper.displayErrorMessage(serviceResponse.errorMessageKey);
+    				  }
+    			  }
+    		  }
+    	  }
+    	  cursor_clear();
+      }
+})
+
+function delCSRCookie(){
+            dojo.require("dojo.cookie");
+            dojo.cookie("CSRFirstName", null, {expires: -1});
+            dojo.cookie("CSRLastName", null, {expires: -1});
+            dojo.cookie("AssistantCode", null, {expires: -1});
+            dojo.cookie("DepartmentNumber", null, {expires: -1});
+}
+
+function setCSRCookie(firstName,lastName, assistantCode, departmentNumber){
+      
+      dojo.require("dojo.cookie");
+            dojo.cookie("CSRFirstName", firstName, { expires: 1 });
+          dojo.cookie("CSRLastName",lastName , { expires: 1 });
+          dojo.cookie("AssistantCode",assistantCode , { expires: 1 });
+          dojo.cookie("DepartmentNumber",departmentNumber , { expires: 1 });
+}
+
+function validateGiftcardForm(){
+      var giftCardNumber = document.getElementById('giftCardNumber');
+      var password = document.getElementById('password');
+      var TRUT = document.getElementById('TRUT');
+      
+      if(null != giftCardNumber && giftCardNumber.value === ""){
+    	  MessageHelper.formErrorHandleClient(giftCardNumber.id, MessageHelper.messages["MISSING_GIFT_CARD_NUM"]);
+    	  return false;
+      }
+      if (giftCardNumber.value.length != 16) {
+    	  MessageHelper.formErrorHandleClient(giftCardNumber.id, MessageHelper.messages["INVALID_GIFT_CARD_NUM"]);
+    	  return false;
+      }
+      if (!MessageHelper.IsNumeric(giftCardNumber.value)) {
+    	  MessageHelper.formErrorHandleClient(giftCardNumber.id, MessageHelper.messages["GIFTCARD_OR_CLAVE_NUMERIC"]);
+    	  return false;   	  
+      }
+      if(null != password && password.value === ""){
+    	  MessageHelper.formErrorHandleClient(password.id, MessageHelper.messages["MISSING_GIFT_CARD_CLAVE"]);
+          return false;
+      }
+      if (password.value.length != 4) {
+    	  MessageHelper.formErrorHandleClient(password.id, MessageHelper.messages["INVALID_GIFT_CARD_CLAVE"]);
+          return false;
+      }
+      if (!MessageHelper.IsNumeric(password.value)) {
+    	  MessageHelper.formErrorHandleClient(password.id, MessageHelper.messages["GIFTCARD_OR_CLAVE_NUMERIC"]);
+    	  return false;   	  
+      }
+      if(null != TRUT && TRUT.value === ""){
+    	  MessageHelper.formErrorHandleClient(TRUT.id, MessageHelper.messages["MISSING_GIFT_CARD_TRUT"]);
+          return false;
+      }
+      if(!validateRut(TRUT.value)){
+    	  MessageHelper.formErrorHandleClient(TRUT.id, MessageHelper.messages["ERROR_INVALID_RUT"]);
+          return false;
+      }
+      return true;
+}
+
+function formatRut(rut){
+	return (rut.replace(/[.-]/g, "")).toUpperCase();
+}
+
+function validateRut(logonid){
+	//alert("logonid --> " + logonid);
+	logonid = logonid.replace(/[.-]/g, "");
+	
+	var bufferZeros = 9-(logonid.length);
+	
+	if((logonid.length)<6){
+		
+		return false;
+	}
+	var count = 0;
+	for(var i = 0; i < logonid.length; i++){
+		//alert(i);
+		if(logonid.charAt(i)=='0'){
+			count++;
+		}		
+	}
+	//alert("count--> "+count);
+	if(count == logonid.length){
+		return false;
+	}
+	
+	if((logonid.length)<9){
+		for(i=0; bufferZeros > i; i++){
+			logonid = '0'.concat(logonid);
+		}
+	}
+
+	// RUT format XXXXXXXX-Y 
+	var regexRut =  /^(\d{2})(\.?)(\d{3})(\.?)(\d{3})(\-?)[\dKk]$/;
+
+	if (!regexRut.test(logonid)) {
+		return false;
+	}
+	
+	var RUT_CHECK_DIGIT = '32765432';
+	
+	var rutSum = 0;
+	var restDigit = 0;
+	var digitVerifier = '0';
+	
+	logonid = logonid.toUpperCase();
+	
+	rut = logonid.substring(0,8);
+	rutCheck = logonid.charAt(logonid.length-1);
+	
+	// Step 1 = multiply each digit of rut with each digit of rutCheckDigit
+	for(i=0;i<rut.length;i++)
+	{
+		rutSum = rutSum + (rut.charAt(i) * RUT_CHECK_DIGIT.charAt(i));
+	}
+	
+	//Step 2: Take mod 11 of rutSum and get the remainder
+	restDigit = (rutSum % 11);
+	
+	//Step 3: calculate the check digit
+	if((11 - restDigit) == 11)
+		digitVerifier = '0';
+	else
+	{
+		if((11 - restDigit) == 10)
+			digitVerifier = 'K';
+		else
+			digitVerifier = 11 - restDigit;
+	}
+	
+	//Step 4: evaluate if digitVerifier is the same as rutCheck digit that the user has entered		
+	if(!(rutCheck == digitVerifier))
+	{
+		return false;
+	}
+	return true;
+}
+
+function processWarrantyCheckBox(orderItemIdFrom, qty, catEntryIdTo, warrantyYears, warrantyType, addressId) {
+	var checkBox =  document.getElementById("warranty_check_for_" + orderItemIdFrom);
+	
+	//setCurrentId("warranty_check_for_" + orderItemIdFrom);
+	
+	if(checkBox.checked) {
+		var params = [];
+		params.isWarrantyItem = true;
+		params.orderItemIdFrom = orderItemIdFrom;
+		
+		if(null != warrantyType) {
+			params.guaranteeType = warrantyType;
+		}
+		if(null != warrantyYears) {
+			params.warrantyYears = warrantyYears;
+		}
+		if(qty == null || qty == ""){
+			qty = 1; 
+		}
+		if (null != addressId) {
+			params.addressId = addressId;
+		}
+		categoryDisplayJS.AddItem2ShopCartAjax(catEntryIdTo, qty, params);
+		// PAR-1128 GA
+		//try{_gaq.push(['_trackEvent','Despacho','Extension Garantia','Checklist']);}catch(err){}
+	} else {
+		var warrantyOrderItemId = document.getElementById("warranty_check_for_" + orderItemIdFrom).value;
+		CheckoutHelperJS.deleteWarrantyFromCart(warrantyOrderItemId);
+	}
+}
+
+//Start: new Checkout: Get warranty selected
+
+function getWarrantySelected(orderItemIdFrom, orderItemIdTo) {
+
+	var selectedWarrantyOption = dojo.query('input[type=radio]:checked',dojo.query('.carroWarrantyModal')[0])[0];
+   	        	
+	if(selectedWarrantyOption.value=="sinGarantia") {   
+		
+		if(null != orderItemIdTo && orderItemIdTo != 'undefined' &&  "" != orderItemIdTo) {			       		
+			CheckoutHelperJS.deleteWarrantyFromCart(orderItemIdTo);  //delete the warranty orderitem record			
+		}else {	
+			closeWarrantyModal();
+			return false;     //just close the modal, as first time modal with a default: sin garantia.
+		}
+  	} else {     
+		//For all warranty objects, do the else.	        		
+       	var catentryObject= selectedWarrantyOption.value.split(",");
+    	//parsing each elements
+    	var orderItemIdFrom = parseInt(catentryObject[0]);
+    	var qty = parseFloat(catentryObject[1]);
+    	var catEntryIdTo = parseInt(catentryObject[2]);
+    	var warrantyYears = parseInt(catentryObject[3]);
+    	var addressId = catentryObject[5].replace(/\s/g,'');
+    	var warrantyType = catentryObject[4].replace(/\s/g,'');
+    	
+    	processWarrantyRadio(orderItemIdFrom, qty, catEntryIdTo, warrantyYears, warrantyType, addressId);
+	} //else end
+
+}
+
+function openWarrantyModal(orderItemId){
+	if(dojo.byId('miModal_'+orderItemId)){
+		
+		// To open the warranty modal
+		dojo.byId('miModal_'+orderItemId).className = 'carroWarrantyModal';
+		
+		// To select the default option
+		if(dojo.query('[data-checked]',dojo.query('.carroWarrantyModal')[0]).length > 0){
+			dojo.query('[data-checked]',dojo.query('.carroWarrantyModal')[0])[0].checked = true;
+		}else{
+			dojo.query('.sinGarantia',dojo.query('.carroWarrantyModal')[0])[0].checked = true;
+		}
+		
+		// To block the scroll bar of the page
+		unloadScrollBars();
+	}
+	
+}
+
+function closeWarrantyModal(){
+	dojo.query('.carroWarrantyModal').forEach(function(element){        		
+		element.className = 'hide';	
+		reloadScrollBars();
+	});
+//	if(dojo.byId('miModal_'+orderItemId)){
+//		dojo.byId('miModal_'+orderItemId).className = 'hide';
+//		reloadScrollBars();
+//	}
+}
+
+//End: New checkout
+
+function processWarrantyRadio(orderItemIdFrom, qty, catEntryIdTo, warrantyYears, warrantyType, addressId) {
+	var checkBox =  document.getElementById("warranty_check_for_" + orderItemIdFrom);
+	if(checkBox.checked) {
+		document.getElementById("warrantyItemOrderItemIDFrom").value = orderItemIdFrom;
+		var warrantyOrderItemId = document.getElementById("warranty_check_for_" + orderItemIdFrom).value;
+		setCurrentId("warranty_check_for_" + orderItemIdFrom);
+		CheckoutHelperJS.changeWarrantyItemInCart(warrantyOrderItemId, catEntryIdTo, warrantyYears, warrantyType, addressId);
+	}else{
+		checkBox.checked = true;
+		processWarrantyCheckBox(orderItemIdFrom, qty, catEntryIdTo, warrantyYears, warrantyType, addressId);
+	}
+}
+	
+function showWarrantyModal(orderItemIdFrom){
+	var WarrantyContainerNode = dojo.byId("WarrantyWidgetHidden_"+orderItemIdFrom);
+	var WarrantyModal = dojo.byId("WarrantyContainer_"+orderItemIdFrom);
+	var WarrantyBackgroundNode = dojo.byId("WarrantyBackground_"+orderItemIdFrom);
+	var WarrantyDivNode = document.createElement("DIV");
+	
+	WarrantyBackgroundNode.style.display="block";
+	WarrantyContainerNode.style.display ="block";
+	dojo.byId("Warranty_Wrapper_"+orderItemIdFrom).focus();
+
+	var lastX=0, lastY=0;
+	var divInfo = dojo.position(WarrantyBackgroundNode, true),
+		spanInfo = dojo.position(WarrantyModal, true);
+	
+	lastX += divInfo.x - spanInfo.x + (divInfo.w - spanInfo.w) / 2;
+	lastY += divInfo.y - spanInfo.y + (divInfo.h - spanInfo.h) / 2;
+
+	dojo.style(WarrantyModal, {
+		left: lastX + "px",
+		top: lastY + "px"
+	});
+}
+
+var hideWarrantyModal = function(orderItemIdFrom){
+	var WarrantyContainerNode = dojo.byId("WarrantyWidgetHidden_"+orderItemIdFrom);
+	var WarrantyModal = dojo.byId("WarrantyContainer_"+orderItemIdFrom);
+	var WarrantyBackgroundNode = dojo.byId("WarrantyBackground_"+orderItemIdFrom);
+
+	WarrantyBackgroundNode.style.display="none";
+	WarrantyContainerNode.style.display ="none";
+		
+	var lastX=0, lastY=0;
+	var divInfo = dojo.position(WarrantyBackgroundNode, true),
+		spanInfo = dojo.position(WarrantyModal, true);
+			
+	lastX += divInfo.x - spanInfo.x + (divInfo.w - spanInfo.w) / 2;
+	lastY += divInfo.y - spanInfo.y + (divInfo.h - spanInfo.h) / 2;
+		
+	dojo.style(WarrantyModal, {
+		left: lastX + "px",
+		top: lastY + "px"
+	});
+};
+
+var keepWarrantyModal = function(orderItemIdFrom){
+	var WarrantyContainerNode = dojo.byId("WarrantyWidgetHidden_"+orderItemIdFrom);
+	var WarrantyBackgroundNode = dojo.byId("WarrantyBackground_"+orderItemIdFrom);
+	var WarrantyModal = dojo.byId("WarrantyContainer_"+orderItemIdFrom);
+	
+	WarrantyContainerNode.style.display ="block";
+	WarrantyBackgroundNode.style.display="block";
+	
+	WarrantyModal.click(function(){
+		WarrantyModal.focus();
+	});
+};
+
+function submitManageGiftRigistryForm(formElement) {
+	var params = [];
+	params.externalGiftRegistryId = formElement.externalGiftRegistryId.value;
+	params.despachoCentralizado = document.getElementById("despachoCentralizado");
+	params.despachoTotal = document.getElementById("despachoTotal");
+	if(params.despachoCentralizado.checked) {
+		params.despachoCentralizado = 1;
+	}
+	if(params.despachoTotal.checked) {
+		params.despachoCentralizado = 0;
+	}
+	wc.service.invoke("AjaxManageGiftRigistrySection", params);
+}
+
+/**
+ * 
+ */
+wc.service.declare({
+	id: "AjaxManageGiftRigistrySection",
+	actionId: "AjaxManageGiftRigistrySection",
+	url: getAbsoluteURL() + "CENCreateListGiftRegistryCmd",
+	formId: ""
+
+	/**
+	 * Clear messages on the page.
+	 * @param (object) serviceResponse The service response object, which is the JSON object returned by the service invocation
+	 */
+	,successHandler: function(serviceResponse) {
+		window.location.reload();
+	}
+	
+	/**
+	 * Displays an error message on the page if the request failed.
+	 * @param (object) serviceResponse The service response object, which is the JSON object returned by the service invocation.
+	 */
+	,failureHandler: function(serviceResponse) {
+		if(serviceResponse){
+            if(serviceResponse.exceptionData) {
+            	MessageHelper.displayErrorMessage(MessageHelper.messages[serviceResponse.exceptionData.errorReason]);
+            }
+            else{
+            	if (serviceResponse.errorMessage) {
+            		MessageHelper.displayErrorMessage(serviceResponse.errorMessage);
+            	} else {
+			             if (serviceResponse.errorMessageKey) {
+			                MessageHelper.displayErrorMessage(serviceResponse.errorMessageKey);
+			             }
+            	}
+            }
+       }
+  
+      cursor_clear();
+	}
+})
+
+function updateNoviosAddressModalSearch(form, isBillingPageValue) {
+	
+	/*
+	 * START: CEN REQ - 475 : validation for checking novios input elements
+	 * Minimum - 3 characters needs to enter to search.
+	 */
+	var firstNameValue = trim(form["noviosFirstName"].value);
+	var lastNameValue = trim(form["noviosLastName"].value);
+	var externalIdValue = trim(form["externalId"].value);
+	dojo.byId('novios_results_area').innerHTML = "";
+	if((firstNameValue != "" && firstNameValue.length < 3) && lastNameValue == "" && externalIdValue == ""){
+		MessageHelper.formErrorHandleClient("noviosFirstName", MessageHelper.messages["ERROR_INVALID_NOVIOS_FIELD_LENGTH"]);		
+		return;
+	}else if((lastNameValue != "" && lastNameValue.length < 3) && firstNameValue == "" && externalIdValue == ""){
+		MessageHelper.formErrorHandleClient("noviosLastName", MessageHelper.messages["ERROR_INVALID_NOVIOS_FIELD_LENGTH"]);
+		return;
+	}else if((externalIdValue != "" && externalIdValue.length < 3) && firstNameValue == "" && lastNameValue == ""){
+		MessageHelper.formErrorHandleClient("externalId", MessageHelper.messages["ERROR_INVALID_NOVIOS_FIELD_LENGTH"]);
+		return;
+	}else if((externalIdValue != "" && externalIdValue.length < 3) || (lastNameValue != "" && lastNameValue.length < 3) 
+			|| (firstNameValue != "" && firstNameValue.length < 3)){
+		dojo.byId('novios_results_area').innerHTML = MessageHelper.messages["ERROR_INVALID_NOVIOS_FIELD_LENGTH"];
+		return;		
+	}
+	/*
+	 * END: CEN REQ - 475 : validation for checking novios input elements
+	 * Minimum - 3 characters needs to enter to search.
+	 */
+	
+	if((externalIdValue != "") && (externalIdValue != undefined) && (externalIdValue != null)){
+		if((externalIdValue).length<8){
+			for(var i=(externalIdValue).length;i<8;i++){
+				externalIdValue='0'+externalIdValue;
+			}
+		}
+	}
+	
+	/*
+	 * START: CenReqNum#167 Passing date to validate the event date for below scenarios.
+	 * 1) If event date is Inactive(eventdate > currentDate + 90 days).variable passing to NoviosAddressModelForm.jsp is "inactiveDate"
+	 * 2) If event date is Expired(eventdate < currentDate - 7 days). variable passing to NoviosAddressModelForm.jsp is "newDate".
+	 */
+		var tempDate = new Date();
+	    tempDate.setDate(tempDate.getDate() - 7);
+	    var year = tempDate.getFullYear();
+	    var month = (tempDate.getMonth()+1);
+	    var day = tempDate.getDate();
+	    if (parseInt(month) < 10) month = "0" + month;
+	    if (parseInt(day) < 10) day = "0" + day;
+	    var parsedDate = year + "-"+month +"-"+ day;
+	    var newDate = parsedDate;
+	    
+	    var tempDate1 = new Date();
+	    tempDate1.setDate(tempDate1.getDate() + 90);
+	    var year = tempDate1.getFullYear();
+	    var month = (tempDate1.getMonth()+1);
+	    var day = tempDate1.getDate();
+	    if (parseInt(month) < 10) month = "0" + month;
+	    if (parseInt(day) < 10) day = "0" + day;
+	    var parseDate = year + "-"+month +"-"+ day;
+	    var inactiveDate = parseDate;
+	    
+	    var currentDate = new Date();
+	    var year = currentDate.getFullYear();
+	    var month = (currentDate.getMonth()+1);
+	    var day = currentDate.getDate();
+	    if (parseInt(month) < 10) month = "0" + month;
+	    if (parseInt(day) < 10) day = "0" + day;
+	    var parseDate = year + "-"+month +"-"+ day;
+	    var presentDate = parseDate;
+	    /*
+		 * END: CenReqNum#311.
+		 */
+	    submitRequest();
+		cursor_wait();
+		wc.render.updateContext( "noviosAddressModalRegistrySearchResults_Context", {firstName:firstNameValue, lastName:lastNameValue, externalId:externalIdValue, isBillingPage:isBillingPageValue, newDate:newDate, inactiveDate:inactiveDate, presentDate:presentDate});
+	
+	//}
+}
+
+function hideOverView(){
+	if(dojo.byId('global_overlay')){
+		var overlay = dojo.byId('global_overlay');
+		dojo.style(overlay,'display','none');	
+	}else{
+		console.debug('Could not find id: global_overlay');
+	}
+}
+
+function displayOverView(){	
+	if(dojo.byId('global_overlay')){
+		var overlay = dojo.byId('global_overlay');
+		dojo.style(overlay,'display','block');	
+	}else{
+		console.debug('Could not find id: global_overlay');
+	}
+}
+
+function startCartDetailsSpinner(spinner_id, cart_table_id, button_id) {
+	setCurrentId(spinner_id);
+	submitRequest();
+	cursor_wait();
+	
+	if(document.getElementById(button_id)){
+		dojo.addClass(document.getElementById(button_id), 'button_inactive');
+	}
+	
+	if(document.getElementById(cart_table_id)){
+		dojo.addClass(document.getElementById(cart_table_id), "refresh_overlay");
+	}
+}
+
+function clearCartDetailsSpinner(spinner_id, cart_table_id, button_id) {
+	if(document.getElementById(button_id)){
+		dojo.removeClass(document.getElementById(button_id), 'button_inactive');
+	}
+	
+	if(document.getElementById(cart_table_id)){
+		dojo.removeClass(document.getElementById(cart_table_id), "refresh_overlay");
+	}
+}
+//INI REQ 470
+function noviosCallback(e,node) {
+	if(	e.keyCode==dojo.keys.ENTER||e.keyCode==dojo.keys.BACKSPACE){
+	return;
+	}
+	var regex = /^\w+|\'+|\-+|ñ+|Ñ+$/;
+    if(node.className==='NumberTextBox'){
+	regex = /^\d+$/;
+    }
+	var key = String.fromCharCode(!e.charCode ? e.which : e.charCode);
+    if(key===undefined || key===''){
+    return;
+    }
+	
+    var test=regex.test(key);
+    if (!test) {
+       e.preventDefault();
+       return false;
+    }
+	}
+// END req 470
+
+function showContactusModal(){		
+		var contactContainerNode = dojo.byId("contactWidgetHidden");
+		var contactModal = dojo.byId("contactContainer");
+		var contactBackgroundNode = dojo.byId("contactBackground");
+		
+		contactBackgroundNode.style.display="block";
+		contactContainerNode.style.display ="block";
+		contactModal.style.display = "block";
+		dojo.byId('formulario').style.display = "block";
+		dojo.byId('contactResponse').style.display = "none";
+
+		var lastX=0, lastY=0;
+		var divInfo = dojo.position(contactBackgroundNode, true),
+			spanInfo = dojo.position(contactModal, true);
+				
+		lastX += divInfo.x - spanInfo.x + (divInfo.w - spanInfo.w) / 2;
+		lastY += divInfo.y - spanInfo.y + (divInfo.h - spanInfo.h) / 2;
+			
+		dojo.style(contactModal, {
+			left: lastX + "px",
+			top: "0px"
+		});
+		window.scrollTo(0,0);
+		//showRUT("red");	
+		//dojo.byId("contact_rut").focus();
+}
+
+function hideContactusModal(){
+		var contactContainerNode = dojo.byId("contactWidgetHidden");
+		var contactModal = dojo.byId("contactContainer");
+		var contactBackgroundNode = dojo.byId("contactBackground");
+	
+		contactBackgroundNode.style.display="none";
+		contactContainerNode.style.display ="none";
+			
+		var lastX=0, lastY=0;
+		var divInfo = dojo.position(contactBackgroundNode, true),
+			spanInfo = dojo.position(contactModal, true);
+						
+		lastX += divInfo.x - spanInfo.x + (divInfo.w - spanInfo.w) / 2;
+		lastY += divInfo.y - spanInfo.y + (divInfo.h - spanInfo.h) / 2;
+					
+		dojo.style(contactModal, {
+			left: lastX + "px",
+			top: lastY + "px"
+		});
+		
+		dojo.query("#formulario input").forEach(function(each){
+		  if(each.type != "radio" && each.type != "hidden"){
+		    each.value="";
+		  }
+		});
+		dojo.query("#formulario select").forEach(function(each){
+		  each.selectedIndex = 0;
+		});
+		dojo.byId("contact_mensaje").value = "";
+		characterCount();
+}
+
+function validateContactusForm(form){
+	reWhiteSpace = new RegExp(/^\s+$/);
+	specialCharactersRegex1 = new RegExp(/^[A-Za-z0-9_\s.,-\/]/);
+	specialCharactersRegex2 = new RegExp(/^[A-Za-z0-9_??!?,.()@$"#?\s&\/%-]/);
+	var rut="rut";
+	var passport="passport";
+	var firstName = "firstName";
+	var lastName = "lastName";
+	var middleName = "middleName";
+	var contactRUT = "rutNumber";
+	var emailId = "emailId";
+	var vphoneNumber = "phoneNumber";
+	var contactReason = "reason";
+	var contactSubReason = "subreason";//1143
+//	var contactTienda = "tienda";
+	var contactCategoria = "categoria";
+	var contactMessage = "mensaje";
+	
+	var formFields="";
+	var isValid = true;	
+	formFields = form["contactUsFormFields"].value.split(",");
+	
+
+	for(var i=0; i<formFields.length; i++) {
+		var formField = formFields[i];
+		
+		if ((formField==rut) || (formField==passport)){
+			//var nameseletion= dojo.query('input[name="colorRadio"]:checked')[0].value;
+							
+			if(formField == rut ){					
+				form[rut].value = trim(form[rut].value);	
+				if(form[rut].value == "" || reWhiteSpace.test(form[rut].value)){				
+					MessageHelper.formErrorHandleClient(form[rut].id, MessageHelper.messages["CONTACT_ERROR_rutempty"]);
+					return false;
+				}
+				if(!validateRut(form[rut].value)){
+				
+			    	MessageHelper.formErrorHandleClient(form[rut].id, MessageHelper.messages["CONTACT_ERROR_INVALID_RUT"]);
+			        return false;
+			    }
+			}
+			/*else if (nameseletion=="green" && formField == passport){		
+				form[passport].value = trim(form[passport].value);
+				if(form[passport].value == "" || reWhiteSpace.test(form[passport].value)){
+					MessageHelper.formErrorHandleClient(form[passport].id, MessageHelper.messages["CONTACT_ERROR_passportempty"]);
+					return false;
+				}
+				isValid = validateAccentedCharacters(form[passport].value,specialCharactersRegex1);
+			    if(form[passport] != null && !isValid){ 
+					MessageHelper.formErrorHandleClient(form[passport].id,MessageHelper.messages["CONTACT_ERROR_INVALID_PASSPORT"]); 
+					return false;
+			    }
+			}*/
+		}
+		else if(formField == firstName){
+			
+			form[firstName].value = trim(form[firstName].value);
+			if(form[firstName].value == "" || reWhiteSpace.test(form[firstName].value)){ 
+				MessageHelper.formErrorHandleClient(form[firstName].id, MessageHelper.messages["CONTACT_ERROR_FirstNameEmpty"]);
+				return false;
+			}
+			isValid = validateAccentedCharacters(form[firstName].value,specialCharactersRegex1);
+		    if(form[firstName] != null && !isValid){ 
+				MessageHelper.formErrorHandleClient(form[firstName].id,MessageHelper.messages["CONTACT_ERROR_INVALID_FIRST_NAME"]); 
+				return false;
+			}
+			if(!MessageHelper.isValidUTF8length(form[firstName].value, 128)){ 
+				MessageHelper.formErrorHandleClient(form[firstName].id, MessageHelper.messages["CONTACT_ERROR_FirstNameTooLong"]);
+				return false;
+			}
+		}else if(formField == lastName){
+			form[lastName].value = trim(form[lastName].value);
+			if(form[lastName].value == "" || reWhiteSpace.test(form[lastName].value)){ 
+				MessageHelper.formErrorHandleClient(form[lastName].id, MessageHelper.messages["CONTACT_ERROR_LastNameEmpty"]);
+				return false;
+			}
+			isValid = validateAccentedCharacters(form[lastName].value,specialCharactersRegex1);
+		    if(form[lastName] != null && !isValid){ 
+				MessageHelper.formErrorHandleClient(form[lastName].id,MessageHelper.messages["CONTACT_ERROR_INVALID_LAST_NAME"]); 
+				return false;
+			}
+			if(!MessageHelper.isValidUTF8length(form[lastName].value, 128)){ 
+				MessageHelper.formErrorHandleClient(form[lastName].id, MessageHelper.messages["CONTACT_ERROR_LastNameTooLong"]);
+				return false;
+			}
+		}else if(formField == middleName){
+			form[middleName].value = trim(form[middleName].value);			
+			isValid = validateAccentedCharacters(form[middleName].value,specialCharactersRegex1);
+		    if(form[middleName] != null && !isValid){ 
+				MessageHelper.formErrorHandleClient(form[middleName].id,MessageHelper.messages["CONTACT_ERROR_INVALID_MIDDLE_NAME"]); 
+				return false;
+			}
+			if(!MessageHelper.isValidUTF8length(form[middleName].value, 128)){ 
+				MessageHelper.formErrorHandleClient(form[middleName].id, MessageHelper.messages["CONTACT_ERROR_MiddleNameTooLong"]);
+				return false;
+			}
+		} else if(formField == emailId){
+			form[emailId].value = trim(form[emailId].value);
+			var emailIdValRegExp = new RegExp(/^([\w-]+(?:\.[\w-]+)*)@((?:[\w-]+\.)*\w[\w-]{0,66})\.([A-Za-z]{2,6}(?:\.[A-Za-z]{2})?)$/);
+			if(form[emailId].value == "" || reWhiteSpace.test(form[emailId].value)){
+				MessageHelper.formErrorHandleClient(form[emailId].id, MessageHelper.messages["CONTACT_ERROR_EmailEmpty"]);
+				return false;
+			}
+			if(!MessageHelper.isValidUTF8length(form[emailId].value, 256)){ 
+				MessageHelper.formErrorHandleClient(form[emailId].id, MessageHelper.messages["CONTACT_ERROR_EmailTooLong"]);
+				return false;
+			}
+			if(!emailIdValRegExp.test(form[emailId].value)){				
+				MessageHelper.formErrorHandleClient(form[emailId].id, MessageHelper.messages["CONTACT_ERROR_INVALIDEMAILFORMAT"]);
+				return false;
+			}
+		}else if ((formField=='phoneNumber') || (formField=='cellPhoneNumber')){
+			var nameseletion= dojo.query('input[name="phoneRadio"]:checked')[0].value;
+			var phone=(nameseletion=='landLine'?'phoneNumber':'cellPhoneNumber');
+			form[phone].value = trim(form[phone].value);
+			if(form[phone].value == "" || reWhiteSpace.test(form[phone].value)){
+				MessageHelper.formErrorHandleClient(form[phone].id, MessageHelper.messages["CONTACT_ERROR_PhonenumberEmpty"]);
+				return false;
+			}
+			// Siebel will accept only 10 characters for phone number. Value changed from 32 to 10.
+			if(!MessageHelper.isValidUTF8length(form[phone].value, 10)){ 
+				MessageHelper.formErrorHandleClient(form[phone].id, MessageHelper.messages["CONTACT_ERROR_PhoneTooLong"]);
+				return false;
+			}
+			if(!MessageHelper.IsValidPhone(form[phone].value)){
+				MessageHelper.formErrorHandleClient(form[phone].id, MessageHelper.messages["CONTACT_ERROR_INVALIDPHONE"]);
+				return false;
+			}
+		}else if(formField == contactReason){
+			form[contactReason].value = trim(form[contactReason].value);
+			if(form[contactReason].value == "" || reWhiteSpace.test(form[contactReason].value) || form[contactReason].value =="Seleccione"){
+				MessageHelper.formErrorHandleClient(form[contactReason].id, MessageHelper.messages["CONTACT_ERROR_REASON_EMPTY"]);
+				return false;
+			}			
+//		}else if(formField == contactTienda){
+//			form[contactTienda].value = trim(form[contactTienda].value);
+//			if(form[contactTienda].value == "" || reWhiteSpace.test(form[contactTienda].value) || form[contactTienda].value =="Seleccione"){
+//				MessageHelper.formErrorHandleClient(form[contactTienda].id, MessageHelper.messages["CONTACT_ERROR_TIENDA_EMPTY"]);
+//				return false;
+//			}
+		}
+		//1143 - Start
+		else if(formField == contactSubReason){
+			form[contactSubReason].value = trim(form[contactSubReason].value);
+			if(form[contactSubReason].value == "" || reWhiteSpace.test(form[contactSubReason].value) || form[contactSubReason].value =="Seleccione"){
+				MessageHelper.formErrorHandleClient(form[contactSubReason].id, MessageHelper.messages["CONTACT_ERROR_SUBREASON_EMPTY"]);
+				return false;
+			}			
+		}
+		//1143 - End
+		else if(formField == contactMessage){
+			form[contactMessage].value = trim(form[contactMessage].value);
+			if(form[contactMessage].value == "" || reWhiteSpace.test(form[contactMessage].value)){
+				MessageHelper.formErrorHandleClient(form[contactMessage].id, MessageHelper.messages["CONTACT_ERROR_MESSAGE_EMPTY"]);
+				return false;
+			}
+		}
+	}
+	return true;	
+}
+
+function validateAccentedCharacters(name,regExpr){
+	splitName = name;
+	i=0;
+	isValid = true;
+	
+	while (i < splitName.length){
+		if(splitName[i]=='=' || splitName[i]==';'){
+			return false;
+		}
+	if(!regExpr.test(splitName[i])){
+		temp = splitName[i];
+		if(!(temp.charCodeAt(0)==161 ||temp.charCodeAt(0)==191 || temp.charCodeAt(0)==209 ||temp.charCodeAt(0)==241 || temp.charCodeAt(0)==193 ||temp.charCodeAt(0)==201 || temp.charCodeAt(0)==205 || temp.charCodeAt(0)==211 || temp.charCodeAt(0)==218 ||temp.charCodeAt(0)==225 || temp.charCodeAt(0)==233 || temp.charCodeAt(0)==237 || temp.charCodeAt(0)==243 || temp.charCodeAt(0)==250)){
+		 isValid = false;
+		 return isValid;
+		}
+	}
+	i++;
+	}
+	return isValid;
+}
+
+function submitContactusForm(form){
+	var params = [];
+
+	if(validateContactusForm(form)){
+		
+		//var nameSelected = dojo.query('input[name="colorRadio"]:checked')[0].value; 		
+		var chkPhoneNumber = dojo.query('input[name="phoneRadio"]:checked')[0].value; 		
+		
+		//Commented for recent changes in Siebel form
+		
+		/*if (nameSelected == "red"){
+			params.rut = form.contact_rut.value;
+		}
+		if (nameSelected == "green"){
+			params.passport = form.contact_passport.value;	
+		}
+		*/
+		params.rut = formatRut(form.contact_rut.value);
+		params.firstName = form.contact_firstName.value;
+		params.lastName = form.contact_lastName.value;
+		params.middleName = form.contact_middleName.value;
+		
+		params.emailId = form.contact_emailId.value;
+	//	params.prefijo = form.prefijo.value;
+		
+		params.phoneNumber = (chkPhoneNumber=='landLine'?form.phoneNumber.value: form.cellPhoneNumber.value);	
+		params.TipoTelefono = chkPhoneNumber=='landLine'?'fijo': 'celular'; // Added for New Requirement in siebel
+		
+		//1143-Start
+		//params.motivo = form.contact_reason.value;
+		params.motivo_tipo = form.contact_reason.value;
+		params.motivo_subtipo = form.contact_subreason.value;
+		//1143-End
+//		params.tipoTienda = form.contact_tienda.value;	
+		
+		params.mensaje = form.contact_mensaje.value;
+		
+		submitRequest();
+		cursor_wait();
+		wc.service.invoke("AjaxContactUsModal", params);
+	}
+}
+// REQ:1019
+function showUparrow() {
+	//PAR-1084 Css Sprite
+document.getElementById("ayuda_uparrow").style.display="inline-block";
+document.getElementById("ayuda_arrow").style.display="none";
+    }
+
+function showDownarrow(){
+	//PAR-1084 Css Sprite
+document.getElementById("ayuda_uparrow").style.display="none";
+document.getElementById("ayuda_arrow").style.display="inline-block";
+}
+
+// To allow only numbers as a input
+function soloNumeros(e){
+    key = e.keyCode || e.which;
+    tecla = String.fromCharCode(key).toLowerCase();
+    letras = " 1234567890";
+    especiales = "8-37-39-46";
+
+    tecla_especial = false
+    for(var i in especiales){
+         if(key == especiales[i]){
+             tecla_especial = true;
+             break;
+         }
+     }
+
+     if(letras.indexOf(tecla)==-1 && !tecla_especial){
+         return false;
+     }
+}
+
+/**
+ * PAR 1157
+ * @param fromPage
+ * @param id
+ * @return
+ */
+function processOneClickPayment(fromPage,id,orderId) {
+	
+	if(orderId == undefined || orderId == "")
+		return false;
+	
+	var params = [];
+	params.orderId = orderId;
+	params.storeId = CommonContextsJS.storeId;
+	params.langId = CommonContextsJS.langId;
+	params.catalogId = CommonContextsJS.catalogId;
+	
+	oneClick_Service = wc.service.getServiceById('AjaxCENOneClickPayment');
+	oneClick_Service.formId = fromPage;
+	
+	currentId = id;
+	//For Handling multiple clicks
+	if(!submitRequest()){
+		return;
+	}   
+	cursor_wait();	
+	
+	wc.service.invoke('AjaxCENOneClickPayment', params);
+}
+	
+//-----------------------------------------------------------------
+//Licensed Materials - Property of IBM
+//
+//WebSphere Commerce
+//
+//(C) Copyright IBM Corp. 2009 All Rights Reserved.
+//
+//US Government Users Restricted Rights - Use, duplication or
+//disclosure restricted by GSA ADP Schedule Contract with
+//IBM Corp.
+//-----------------------------------------------------------------
+
+//<%--
+//********************************************************************
+
+
+/**
+* @fileOverview This class contains key-value paired variables that are
+* mapped to their respective services. The variables are used to determine
+* which refresh areas to update. For example, the order_updated variable is
+* used update order related refresh areas.
+*/
+
+
+/**
+* map order_updated to all the services that result in changes to an order
+* @static
+*/
+var order_updated = {	'AjaxAddOrderItem':'AjaxAddOrderItem',
+											'AjaxAddOrderItemWithShipingInfo':'AjaxAddOrderItemWithShipingInfo',
+											'AjaxDeleteOrderItem':'AjaxDeleteOrderItem',
+											'AjaxUpdateOrderItem':'AjaxUpdateOrderItem',
+											'AjaxUpdateOrderShippingInfo':'AjaxUpdateOrderShippingInfo',
+											'AjaxOrderCalculate':'AjaxOrderCalculate',
+											'AjaxLogoff':'AjaxLogoff',
+											'AjaxSetPendingOrder':'AjaxSetPendingOrder',
+											'AjaxUpdatePendingOrder':'AjaxUpdatePendingOrder',
+											'AjaxSingleOrderCancel':'AjaxSingleOrderCancel',
+											'AjaxUpdateRewardOption':'AjaxUpdateRewardOption'
+										};
+
+/**
+*  map address_updated to all the services that result in changes to a shopper's
+*  address book
+*  @static
+*/
+var address_updated = {	'AjaxDeleteAddressForPerson':'AjaxDeleteAddressForPerson',
+			'AjaxAddAddressForPerson':'AjaxAddAddressForPerson',
+			'AjaxUpdateAddressForPerson':'AjaxUpdateAddressForPerson',
+			'AjaxAddShippingAndBillingAddressForPersonDuringCheckout':'AjaxAddShippingAndBillingAddressForPersonDuringCheckout'
+		};
+
+/**
+*  map user_changed to all the services that result in the user in session
+*  change
+*  @static
+*/
+var user_changed = {	'AjaxLogonService':'AjaxLogonService',
+											'AjaxLogoff':'AjaxLogoff'
+										};
+
+/**
+*  map wishlist_changed to all the services that result in the changes to a wish list
+*  @static
+*/
+var wishlist_changed = {	'AjaxInterestItemAdd':'AjaxInterestItemAdd',
+												'AjaxInterestItemDelete':'AjaxInterestItemDelete',
+												'AjaxLogonService':'AjaxLogonService',
+												'AjaxLogoff':'AjaxLogoff'
+											};
+/**
+*  map listorders_changed to all the services that result in the changes to the list of saved orders
+*  @static
+*/
+var listorders_changed = { 'AjaxOrderCreate':'AjaxOrderCreate',
+		 				  'AjaxSingleOrderCancel':'AjaxSingleOrderCancel',
+		 				   'AjaxSingleOrderSave':'AjaxSingleOrderSave',
+		 				   'AjaxCurrentOrderCalculate':'AjaxCurrentOrderCalculate',
+		 				   'AjaxSingleOrderCalculate':'AjaxSingleOrderCalculate',
+		 				   'AjaxAddOrderItem':'AjaxAddOrderItem'};
+
+
+//-----------------------------------------------------------------
+//Licensed Materials - Property of IBM
+//
+//WebSphere Commerce
+//
+//(C) Copyright IBM Corp. 2008, 2010 All Rights Reserved.
+//
+//US Government Users Restricted Rights - Use, duplication or
+//disclosure restricted by GSA ADP Schedule Contract with
+//IBM Corp.
+//-----------------------------------------------------------------
+
+/** 
+* @fileOverview This file provides the common render context variables and functions, 
+* and defines all the render contexts needed throughout the store.
+*/
+
+dojo.require("wc.render.common");
+
+/** 
+* @class The CommonContextsJS class defines all the common variables and functions 
+* for the render contexts across all store pages.
+*/
+CommonContextsJS = {
+	/**
+	 * This variable stores the ID of the language that the store is currently using.
+	 * @private
+	 */
+	langId: "-1",
+
+	/**
+	 * This variable stores the ID of the current store.
+	 * @private
+	 */	
+	storeId: "",
+
+	/**
+	 * This variable stores the ID of the catalog that is used in the store.
+	 * @private
+	 */	
+	catalogId: "",
+
+	/** 
+	 * Sets the common ids used in the store - language id, store id, and catalog id.
+	 * 
+	 * @param {string} langId The id of the store language.
+	 * @param {string} storeId The id of the store.
+	 * @param {string} langId The id of the catalog used in the store.
+	 */
+	setCommonParameters:function(langId,storeId,catalogId){
+			this.langId = langId;
+			this.storeId = storeId;
+			this.catalogId = catalogId;
+	},
+
+	/** 
+	 * Updates the specified context's property and assign it the desired value.
+	 * 
+	 * @param {string} contextId The id of the render context 
+	 * @param {string} property The name of the context's property to update
+	 * @param {string} value The value to update the specified property to
+	 */
+	setContextProperty:function(contextId,property,value){
+		wc.render.getContextById(contextId).properties[property] = value;
+	}
+
+}
+
+/**
+* Declares a new render context for Multiple Shipment Shipping & Billing display.
+*/
+wc.render.declareContext("multipleShipmentDetailsContext", {shipmentDetailsArea: "update"},""),
+
+/**
+* Declares a new render context for Single Shipment Shipping Charge display.
+*/
+wc.render.declareContext("singleShipmentShipChargeContext", null,""),
+
+/**
+* Declares a new render context for Multiple Shipment Shipping Charge display.
+*/
+wc.render.declareContext("multipleShipmentShipChargeContext", null,""),
+
+/**
+* Declares a new render context for Single Shipment Shipping & Billing display.
+*/
+wc.render.declareContext("traditionalShipmentDetailsContext",{shipmentDetailsArea: "update"},""),
+
+/**
+* Declares a new render context for the Current Order Totals display.
+*/
+wc.render.declareContext("currentOrder_Context",null,""),
+
+/**
+* Declares a new render context for creating/editing the shipping address
+* and initializes it with the shipping address id and address type to the default placeholder values.
+*/
+wc.render.declareContext("editShippingAddressContext",{shippingAddress: "0",addressType: "ShippingAndBilling"},"","Main"),
+
+/**
+* Declares a new render context for the select Billing Address dropdowns,
+* and initializes each Billing Address dropdown with address id and billing url placeholders.
+* Even though BillingURL1, 2, 3 point to same BillingAddressDropDisplay.jsp we cannot use only one URL to submit 3 requests.
+* There are 3 billing dropdown boxes in the Checkout page and all needs to be refreshed on address add/change.
+* But using the same URL and submitting 3 requests separately to refresh 3 dropdown boxes doesn't work, 
+* and invariably one of the request doesn't come back with response. Solution is to use 3 different URLs as a workaround.
+* BillingURL1,2,3 are set to correct <c:url values in .JSP page using setContextPRoperty method..
+*/
+wc.render.declareContext("billingAddressDropDownBoxContext",{billingAddress1: "0", billingAddress2: "0", billingAddress3: "0", billingURL1: "",billingURL2:"",billingURL3:"",areaNumber:'0',payment1: "", payment2: "", payment3: "", paymentTCId1: "", paymentTCId2: "", paymentTCId3: ""},""),
+
+/**
+* Declares a new render context for showing/hiding the address form on the Checkout pages,
+* and initializes the show and hide area to a placeholder value.  
+*/
+wc.render.declareContext("contextForMainAndAddressDiv",{showArea: "0",hideArea: "0"},""),
+
+/**
+* Declares a new render context for the select Shipping Address dropdown.
+*/
+wc.render.declareContext("shippingAddressDropDownBoxContext",null,""),
+
+/**
+* Declares a new render context for the Mini Shopping Cart.
+*/
+wc.render.declareContext("MiniShoppingCartContext",null,""),
+
+/**
+* Declares a new render context for the Mini Shopping Cart dropdown contents.
+*/
+wc.render.declareContext("MiniShopCartDropDownContext",null,""),
+
+wc.render.declareContext("addToCartModalContext",null,""),
+
+/**
+* Declares a new render context for the Category display with pagination.
+*/
+wc.render.declareContext("CategoryDisplay_Context",{pageView:"", beginIndex:""},""),
+
+/**
+* Declares a new render context for the Sub-category display with pagination.
+*/
+wc.render.declareContext("SubCategoryDisplay_Context",null,""),
+
+/**
+* Declares a new render context for the Wishlist display,
+* and initializes it with the post URL to load. 
+*/
+wc.render.declareContext("WishlistDisplay_Context",{url:""},""),
+
+/**
+* Declares a new render context for the Shared Wishlist display,
+* and initializes it with the post URL to load. 
+*/
+wc.render.declareContext("SharedWishlistDisplay_Context",{url:""},""),
+
+/**
+* Declares a new render context for Shopping Cart with pagination,
+* and initializes it with the beginning index value. 
+*/
+wc.render.declareContext("ShopCartPaginationDisplay_Context",{},""),
+/**
+* Declares a new render context for Pending order details page with pagination,
+* and initializes it with the beginning index value. 
+*/
+wc.render.declareContext("PendingOrderPaginationDisplay_Context",{},""),
+/**
+* Declares a new render context for the pending order details page with pagination,
+* and initializes it with the beginning index value. 
+*/
+wc.render.declareContext("PendingOrderDisplay_Context",{beginIndex: "0"},""),
+
+/**
+* Declares a new render context for Single Shipment Order Summmary/Confirmation with pagination,
+* and initializes it with the beginning index value. 
+*/
+wc.render.declareContext("OrderItemPaginationDisplay_Context",{beginIndex: "0"},""),
+
+/**
+* Declares a new render context for the Order Status Details with pagination,
+* and initializes it with the beginning index value. 
+*/
+wc.render.declareContext("OrderDetailPaginationDisplay_Context",{beginIndex: "0"},""),
+
+/**
+* Declares a new render context for Multiple Shipment Order Summary/Confirmation with pagination,
+* and initializes it with the beginning index value.
+*/
+wc.render.declareContext("MSOrderItemPaginationDisplay_Context",{beginIndex: "0"},""),
+
+/**
+* Declares a new render context for the Coupon Wallet display.
+*/
+wc.render.declareContext("CouponDisplay_Context",null,""),
+/**
+* Declares a new render context for the Token Wallet display EXT.
+*/
+wc.render.declareContext("TokenDisplay_Context",null,""),
+
+/**
+* Declares a new render context for the Promotion Choice of free gifts pop-up display.
+*/
+wc.render.declareContext("PromotionFreeGifts_Context",null,""),
+
+/**
+*  Declares a new render context for the saved orders list.
+*/
+wc.render.declareContext("ListOrdersDisplay_Context",{startNumber: "0"},""),
+
+/**
+* Declares a new render context for the scheduled orders status display.
+*/
+wc.render.declareContext("ScheduledOrdersStatusDisplay_Context",{beginIndex: "0", selectedTab: "Scheduled"},""),
+
+/**
+* Declares a new render context for the processed orders status display.
+*/
+wc.render.declareContext("ProcessedOrdersStatusDisplay_Context",{beginIndex: "0", selectedTab: "PreviouslyProcessed"},""),
+
+/**
+* Declares a new render context for the waiting-for-approval orders status display.
+*/
+wc.render.declareContext("WaitingForApprovalOrdersStatusDisplay_Context",{beginIndex: "0", selectedTab: "WaitingForApproval"},""),
+
+/**
+* Declares a new render context for the Browsing History Espot.
+*/
+wc.render.declareContext("BrowsingHistoryContext",{status:"init"},""),
+
+/**
+* Declares a new render context for the Browsing History Display in My Account.
+*/
+wc.render.declareContext("BrowsingHistoryDisplay_Context",{currentPage: "0", pageView: ""},""),
+
+/**
+* Declares a new render context for the subscription display area on category pages.
+*/
+wc.render.declareContext("CategorySubscriptionContext",null,""),
+
+/**
+* Declares a new render context for the recurring order display.
+*/
+wc.render.declareContext("RecurringOrderDisplay_Context",{beginIndex: "0"},""),
+
+/**
+* Declares a new render context for the subscription display.
+*/
+wc.render.declareContext("SubscriptionDisplay_Context",{beginIndex: "0"},""),
+
+/**
+* Declares a new render context for the recent recurring order display.
+*/
+wc.render.declareContext("RecentRecurringOrderDisplay_Context",{beginIndex: "0",isMyAccountMainPage:"true"},""),
+
+/**
+* Declares a new render context for the recent subscription display.
+*/
+wc.render.declareContext("RecentSubscriptionDisplay_Context",{beginIndex: "0",isMyAccountMainPage:"true"},""),
+
+/**
+* Declares a new render context for the recurring order child orders display.
+*/
+wc.render.declareContext("RecurringOrderChildOrdersDisplay_Context",{beginIndex: "0",orderId: ""},""),
+
+/**
+* Declares a new render context for the subscription child orders display.
+*/
+wc.render.declareContext("SubscriptionChildOrdersDisplay_Context",{beginIndex: "0",orderItemId: "",subscriptionName: ""},""),
+
+/**
+* Declares a new render context for the AutoSuggest display.
+*/
+wc.render.declareContext("AutoSuggest_Context",null,""),
+
+/**
+* Declares a new render context for the Cached Suggestions.
+*/
+wc.render.declareContext("CachedSuggestions_Context",null,""),
+
+wc.render.declareContext("addressBookContext", {addressId: "0", type: "0"},""),
+
+wc.render.declareContext("FacturaForm_Context",null,""),
+
+wc.render.declareContext("GiftCardFormDisplayContext", null,""),
+
+wc.render.declareContext("NoviosFormDisplayContext", null,""),
+
+wc.render.declareContext("OrderTotalsContext", null,""),
+
+wc.render.declareContext("PaymentMethodsDisplayContext", null,""),
+
+wc.render.declareContext("BillingRutContext", null,""),
+
+wc.render.declareContext("noviosAddressModalRegistrySearchResults_Context", null,"")
+
+wc.render.declareContext("PhysicalStoreInvContext", null,"")
+
+
+
+
+
+//-----------------------------------------------------------------
+// Licensed Materials - Property of IBM
+//
+// WebSphere Commerce
+//
+// (C) Copyright IBM Corp. 2008, 2011 All Rights Reserved.
+//
+// US Government Users Restricted Rights - Use, duplication or
+// disclosure restricted by GSA ADP Schedule Contract with
+// IBM Corp.
+//-----------------------------------------------------------------
+
+/** 
+ * @fileOverview This file provides the common controller variables and functions, 
+ * and links these controllers to listen to the defined render contexts in CommonContextsDeclarations.js.
+ */
+
+dojo.require("wc.render.common");
+
+/** 
+ * @class The CommonControllersDeclarationJS class defines all the common variables and functions 
+ * for the controllers of the defined render contexts across all store pages.
+ */
+CommonControllersDeclarationJS = {
+       /**
+        * This variable stores the ID of the language that the store is currently using.
+        * @private
+        */
+       langId: "-1",
+       
+       /**
+        * This variable stores the ID of the current store.
+        * @private
+        */       
+       storeId: "",
+       
+       /**
+        * This variable stores the ID of the catalog that is used in the store.
+        * @private
+        */           
+       catalogId: "",
+       
+       /**
+        * This variable indicates whether the Ajax CheckoutOut flex flow is enabled or not.
+        * @private
+        */           
+       ajaxCheckOut: true,
+       
+       /**
+        * Added for PAR-1039
+        * This variable indicates whether the minicart should be refreshed or not.
+        * @private
+        */
+       miniCartRefreshForEliminar: false,    
+       /**
+        * Sets the common ids used in the store - language id, store id, and catalog id.
+        * 
+        * @param {string} langId The id of the store language.
+        * @param {string} storeId The id of the store.
+        * @param {string} langId The id of the catalog used in the store.
+        */
+       setCommonParameters:function(langId,storeId,catalogId){
+              this.langId = langId;
+              this.storeId = storeId;
+              this.catalogId = catalogId;
+       },
+       
+       /**
+        * Sets the URL of the specified controller.
+        * 
+        * @param {string} controllerId The id of the target controller.
+        * @param {string} url The link to specify for the controller.
+        */       
+       setControllerURL:function(controllerId,url){
+              wc.render.getRefreshControllerById(controllerId).url = url;
+       }
+
+}
+
+/** 
+ * Declares a new refresh controller for the Mini Shopping Cart.
+ */
+wc.render.declareRefreshController({
+       id: "MiniShoppingCartController",
+       renderContext: wc.render.getContextById("MiniShoppingCartContext"),
+       url: "",
+       formId: ""
+       
+    	/**
+    	 * PAR 1157
+    	 * To refresh the minicart if stock validation error 
+    	 * happened from one click
+    	 */  
+       ,renderContextChangedHandler : function(message, widget) {
+           var controller = this;        
+           var renderContext = this.renderContext;              	
+           widget.refresh(renderContext.properties);
+           
+       }
+       /** 
+        * Refreshes the mini shopping cart.
+        * If a new order item is added via an Ajax service call, set the mini shopping cart to display the new order item in the dropdown.
+        * Otherwise, only refresh the contents of mini shopping cart to the updated order information.
+        * This function is called when a modelChanged event is detected. 
+        * 
+        * @param {string} message The model changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,modelChangedHandler: function(message, widget) {
+	
+    	   // Start- updated for PAR-1039 
+    	   var shopcartcheck1= "";
+    	   if(document.getElementById("fromPage") && null != document.getElementById("fromPage")){
+    		   var shopcartcheck1=document.getElementById("fromPage").value;
+    	   }
+    	   if(shopcartcheck1 == 'shoppingCart' || (message.actionId == 'AjaxDeleteOrderItem' && CommonControllersDeclarationJS.miniCartRefreshForEliminar == true)){
+    		   var controller = this;
+    		   var renderContext = this.renderContext;
+    		   if(message.actionId in order_updated || message.actionId == 'AjaxDeleteOrderItemForShippingBillingPage'){
+    			   var param = [];
+
+                   if(message.actionId == 'AjaxAddOrderItem'){
+                	   param.addedOrderItemId = message.orderItemId + "";
+                       if(typeof(analyticsJS) != "undefined"){
+                    	   analyticsJS.recentlyAddedOrderItem = true;
+                	   }
+                       showDropdown = true;
+                       orderParams = message;
+                   }
+                   widget.refresh(param);
+              }
+	 	   }
+    	   //	End- updated for PAR-1039 	
+       }
+
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              destroyDialog();
+              CommonControllersDeclarationJS.miniCartRefreshForEliminar =false;//added for PAr-1039
+              if(showDropdown) {
+                   showDropdown = false;
+              }
+
+              if (miniShopCartObject) {
+            	  miniShopCartObject.init();
+              }
+              cursor_clear();
+            //Add2CartModal goes here
+              
+       }
+
+}),
+
+/** 
+ * Declares a new refresh controller for the Category display with pagination.
+ */
+wc.render.declareRefreshController({
+       id: "CategoryDisplay_Controller",
+       renderContext: wc.render.getContextById("CategoryDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of category listings.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              categoryDisplayJS.contextChanged = true;
+              widget.refresh(renderContext.properties);
+              
+       }
+
+       /** 
+        * This function handles paging and browser back/forward functionalities upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (categoryDisplayJS.contextChanged && (!categoryDisplayJS.isHistory)){
+
+                       var identifier = "&identifier=" + (new Date()).getTime();
+                       
+                       
+                      var historyObject = new categoryDisplayJS.HistoryTracker('CategoryDisplay_Widget', controller.url + identifier);
+                       dojo.back.addToHistory(historyObject);       
+                       categoryDisplayJS.contextChanged = false;
+                       categoryDisplayJS.isHistory = false;  
+              }
+              cursor_clear();
+              
+              try {
+			  	if(typeof(ceadojo) != "undefined") {
+            	  ceadojo.publish("/wc/collaboration/CategoryDisplayRefreshed",[]);
+			  	}
+              }catch(err) {
+            	  console.log(err);
+              }
+
+              
+       }
+
+}),
+
+/** 
+ * Declares a new refresh controller for the Sub-category display with pagination.
+ */
+wc.render.declareRefreshController({
+       id: "SubCategoryDisplay_Controller",
+       renderContext: wc.render.getContextById("SubCategoryDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of sub-category listings.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              categoryDisplayJS.contextChanged = true;
+              widget.refresh(renderContext.properties);
+              
+       }
+
+       /** 
+        * This function handles paging and browser back/forward functionalities upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (categoryDisplayJS.contextChanged && (!categoryDisplayJS.isHistory)){
+
+                       var identifier = "&identifier=" + (new Date()).getTime();
+                       
+                       
+                      var historyObject = new categoryDisplayJS.HistoryTracker('SubCategoryDisplay_Widget', controller.url + identifier);
+                       dojo.back.addToHistory(historyObject);       
+                       categoryDisplayJS.contextChanged = false;
+                       categoryDisplayJS.isHistory = false;  
+              }
+              cursor_clear();
+
+       }
+
+}),
+
+/** 
+ * Declares a new refresh controller for the Wishlist display.
+ */
+wc.render.declareRefreshController({
+       id: "WishlistDisplay_Controller",
+       renderContext: wc.render.getContextById("WishlistDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+	* Displays the previous/next page of items on the Wishlist display page.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              AccountWishListDisplay.contextChanged = true;
+              widget.refresh(renderContext.properties);
+       }
+
+       /** 
+        * Refreshs the wishlist display when an item is added to or deleted from the wishlist.
+        * This function is called when a modelChanged event is detected. 
+        * 
+        * @param {string} message The model changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,modelChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (message.actionId == "InterestItemDelete") {
+                     controller.url = wc.render.getRefreshControllerById("WishlistDisplay_Controller").url;
+                     widget.refresh(renderContext.properties);
+              }
+              if (message.actionId == "AjaxInterestItemAdd") {
+                     controller.url = wc.render.getRefreshControllerById("WishlistDisplay_Controller").url;
+                     widget.refresh(renderContext.properties);
+              }
+              if (message.actionId == "AjaxGiftListServiceCreate" || message.actionId == "AjaxGiftListServiceUpdateDescription" || message.actionId == "AjaxGiftListServiceDeleteGiftList" || message.actionId == "AjaxGiftListServiceRemoveItem" || message.actionId == "AjaxGiftListServiceAddItem") {
+                     widget.refresh(renderContext.properties);
+              }
+       }
+       
+       /** 
+        * This function handles paging and browser back/forward functionalities upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */       
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (AccountWishListDisplay.contextChanged && (!AccountWishListDisplay.isHistory)){
+                       var identifier = "&identifier=" + (new Date()).getTime();
+
+                       // Get MyAccountCenterLinkDisplay_Controller url
+                       var accountDisplayURL = renderContext.properties["url"];              
+                     
+                     if(accountDisplayURL == null || accountDisplayURL == ""){
+                            accountDisplayURL = controller.url;
+                     }else{
+                            accountDisplayURL = accountDisplayURL;
+                     }
+
+                     var historyObject = new AccountWishListDisplay.HistoryTracker('WishlistDisplay_Widget', accountDisplayURL + identifier , controller.url + identifier);
+                       dojo.back.addToHistory(historyObject);       
+                       AccountWishListDisplay.contextChanged = false;
+                       AccountWishListDisplay.isHistory = false;  
+              }
+              
+              if((dojo.byId("multipleWishlistController_select")!=null && dojo.byId("multipleWishlistController_select")!='undefined')){
+              	dojo.byId("multipleWishlistController_select").disabled = false;
+              }
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for the shared Wishlist display. 
+ */
+wc.render.declareRefreshController({
+       id: "SharedWishlistDisplay_Controller",
+       renderContext: wc.render.getContextById("SharedWishlistDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+	* Displays the previous/next page of items on the Shared Wishlist display page.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              widget.refresh(renderContext.properties);
+       }
+       
+       /** 
+        * This function handles paging and browser back/forward functionalities upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */       
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for the Shopping Cart display.
+ */
+wc.render.declareRefreshController({
+       id: "ShopCartDisplayController",
+       renderContext: wc.render.getContextById("ShopCartPaginationDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Refreshs the shopping cart area when an update to the order is made, 
+        * such as add/remove items or update quantity/promotions etc.
+        * This function is called when a modelChanged event is detected. 
+        * 
+        * @param {string} message The model changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,modelChangedHandler: function(message, widget) {
+              var controller = this;
+              
+              var renderContext = this.renderContext;
+              if(message.actionId in order_updated){
+            	  	startCartDetailsSpinner('shopping_cart_product_table_tall','order_details');
+            	  	widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Displays the discounts and promotions area upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+    	   var controller = this;
+           var renderContext = this.renderContext;
+           
+           clearCartDetailsSpinner('shopping_cart_product_table_tall','order_details');
+   	  	
+           if (typeof(savedOrdersJS) != null && typeof(savedOrdersJS) != 'undefined')
+	         {
+	        	 savedOrdersJS.isCurrentOrderPage(true);
+	         }
+              var controller = this;
+              // Order level discount tooltip section - if the tooltip is defined, show the section after area is refreshed
+              if(document.getElementById("discountDetailsSection")!=null )  {
+                     document.getElementById("discountDetailsSection").style.display = "block";
+              }
+              // Promotion code tooltip section - if the tooltip is defined, show the section after area is refreshed
+              if(document.getElementById("appliedPromotionCodes")!=null ) {
+                     document.getElementById("appliedPromotionCodes").style.display = "block";
+              }              
+              
+             //Start Req 914
+              if (document.getElementById("promoInOutButton")!=null) {
+                 if(document.getElementById("promoInOutButton").className == null || document.getElementById("promoInOutButton").className == "" ) {
+                      document.getElementById("promoInOutButton").className = "promowipe_inactive";
+                  } 
+              }
+             //End Req 914  
+               
+              if(!CheckoutHelperJS.isAjaxCheckOut()){
+	              CheckoutHelperJS.setFieldDirtyFlag(false);
+	              CheckoutHelperJS.initDojoEventListenerShoppingCartPage();
+              }
+              
+              //select the proper shipmode that is saved in the cookie
+              var orderId = renderContext.properties["orderId"];
+              if(document.getElementById("currentOrderId")) {
+              	orderId = document.getElementById("currentOrderId").value;
+              }
+              ShipmodeSelectionExtJS.displaySavedShipmentTypeForOrder(orderId);
+			  if(document.getElementById("OrderFirstItemId"))
+			  {
+				ShipmodeSelectionExtJS.orderItemId = document.getElementById("OrderFirstItemId").value;
+			  }
+			  cursor_clear();
+			  /*Added for PAR-1042 beigns*/
+			  if(document.getElementsByClassName("IOaddtocart")){
+				IOaddtocartqty=document.getElementsByClassName("IOaddtocart");
+	           var i;
+	           for (i = 0; i < IOaddtocartqty.length; i++) {
+	        	   document.getElementsByClassName("IOaddtocart")[i].value=1;
+	        	   }
+			  }    
+			  /*Added for PAR-1042 ends*/
+			  // PAR -1126 Performance -Lazy loading - start
+			  if(typeof lazyLodingJS != 'undefined' && null != lazyLodingJS){
+				  lazyLodingJS.initLazyLoding();
+			  }
+			  // PAR -1126 Performance -Lazy loading - End
+       }
+
+}),
+
+/** 
+ * Declares a new refresh controller for the Shopping Cart pagination display.
+ */
+wc.render.declareRefreshController({
+       id: "ShopCartPaginationDisplayController",
+       renderContext: wc.render.getContextById("ShopCartPaginationDisplay_Context"),
+       url: "",
+       formId: ""
+       
+       /** 
+        * Displays the previous/next page of order items in the shopping cart.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["beginIndex"])){
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+              if(!CheckoutHelperJS.isAjaxCheckOut()){
+	              CheckoutHelperJS.setFieldDirtyFlag(false);
+	              CheckoutHelperJS.initDojoEventListenerShoppingCartPage();
+              }
+              
+              //select the proper shipmode that is saved in the cookie
+              var orderId = renderContext.properties["orderId"];
+              if(document.getElementById("currentOrderId")) {
+              	orderId = document.getElementById("currentOrderId").value;
+              }
+              ShipmodeSelectionExtJS.displaySavedShipmentTypeForOrder(orderId);
+       }
+}),
+
+/** 
+* Declares a new refresh controller for the Pending orders details page pagination display.
+*/
+wc.render.declareRefreshController({
+      id: "PendingOrderPaginationDisplayController",
+      renderContext: wc.render.getContextById("PendingOrderPaginationDisplay_Context"),
+      url: "",
+      formId: ""
+      
+      /** 
+       * Displays the previous/next page of order items in the shopping cart.
+       * This function is called when a render context changed event is detected. 
+       * 
+       * @param {string} message The render context changed event message
+       * @param {object} widget The registered refresh area
+       */
+      ,renderContextChangedHandler: function(message, widget) {
+             var controller = this;
+             var renderContext = this.renderContext;
+             
+             if(controller.testForChangedRC(["beginIndex"])){
+            	 widget.refresh(renderContext.properties);
+             }
+      }
+
+      /** 
+       * Hide the progress bar upon a successful refresh.
+       * 
+       * @param {object} widget The registered refresh area
+       */
+      ,postRefreshHandler: function(widget) {
+    	  
+             var controller = this;
+             var renderContext = this.renderContext;
+             cursor_clear();
+      }
+}),
+
+/** 
+ * Declares a new refresh controller for Single Shipment Order Item display with pagination
+ * on the Order Summary and Confirmation pages. 
+ */
+wc.render.declareRefreshController({
+       id: "OrderItemPaginationDisplayController",
+       renderContext: wc.render.getContextById("OrderItemPaginationDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of order items for Single Shipment Order Summary/Confirmation display.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["beginIndex"])){
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for Multiple Shipment Order Item display with pagination
+ * on the Order Summary and Confirmation pages.
+ */
+wc.render.declareRefreshController({
+       id: "MSOrderItemPaginationDisplayController",
+       renderContext: wc.render.getContextById("MSOrderItemPaginationDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of order items for Multiple Shipment Order Summary/Confirmation display.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["beginIndex"])){
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for Coupon Wallet display.
+ */
+wc.render.declareRefreshController({
+	id: "CouponDisplay_Controller",
+	renderContext: wc.render.getContextById("CouponDisplay_Context"),
+	url: "",
+	formId: ""
+	
+	/** 
+	 * Refreshs the coupon wallet display if a coupon is added or removed via an Ajax call.
+	 * This function is called when a modelChanged event is detected. 
+	 * 
+	 * @param {string} message The model changed event message
+	 * @param {object} widget The registered refresh area
+	 */
+	,modelChangedHandler: function(message, widget) {
+		var controller = this;
+		var renderContext = this.renderContext;
+		if(message.actionId == 'AjaxCouponsAddRemove' || message.actionId == 'AjaxWalletItemProcessServiceDelete'
+			 || message.actionId == 'AjaxWalletItemProcessServiceUpdate'){
+			widget.refresh(renderContext.properties);
+		}
+	}
+}),
+
+/** 
+ * Declares a new refresh controller for Coupon Wallet display EXT.
+ */
+wc.render.declareRefreshController({
+	id: "TokenDisplay_Controller",
+	renderContext: wc.render.getContextById("TokenDisplay_Context"),
+	url: "",
+	formId: ""
+	
+	/** 
+	 * Refreshs the coupon wallet display if a coupon is added or removed via an Ajax call.
+	 * This function is called when a modelChanged event is detected. 
+	 * 
+	 * @param {string} message The model changed event message
+	 * @param {object} widget The registered refresh area
+	 */
+	,modelChangedHandler: function(message, widget) {
+		var controller = this;
+		var renderContext = this.renderContext;
+		if(message.actionId == 'AjaxTokensAddRemove' || message.actionId == 'AjaxWalletItemProcessServiceDelete'
+			 || message.actionId == 'AjaxWalletItemProcessServiceUpdate'){
+			widget.refresh(renderContext.properties);
+		}
+	}
+}),
+/** 
+ * Refresh controller for displaying a pop-up of a list of free gifts to choose from .
+ */
+wc.render.declareRefreshController({
+    id: "PromotionFreeGifts_Controller",
+    renderContext: wc.render.getContextById("PromotionFreeGifts_Context"),
+    url: "",
+    formId: ""
+
+    ,modelChangedHandler: function(message, widget) {
+           var controller = this;
+           var renderContext = this.renderContext;
+    }
+
+    ,renderContextChangedHandler: function(message, widget) {
+           var controller = this;
+           var renderContext = this.renderContext;   
+           widget.refresh(renderContext.properties);
+    }
+    
+    ,postRefreshHandler: function(widget) {
+	    var controller = this;
+	    var renderContext = this.renderContext;	   
+	    cursor_clear();
+	    PromotionChoiceOfFreeGiftsJS.showFreeGiftsDialog();
+   }
+}),
+
+/** 
+ * Declares a new refresh controller for the saved orders list with pagination.
+ */
+wc.render.declareRefreshController({
+       id: "ListOrdersDisplay_Controller",
+       renderContext: wc.render.getContextById("ListOrdersDisplay_Context"),
+       url: "",
+       formId: ""
+
+    	   ,modelChangedHandler: function(message, widget) {
+           var controller = this;
+           var renderContext = this.renderContext;
+           if(message.actionId in listorders_changed){
+        	   		
+        		    //After an order create, or order copy service, return to the first page.
+	       	   	 	if ((message.actionId == 'AjaxOrderCreate' || message.actionId == 'AjaxSingleOrderCalculate') && this.renderContext.properties["startNumber"] != 0) 
+	       	   	 	{
+	       	   	 		
+	       	   	 		wc.render.updateContext("ListOrdersDisplay_Context", {'startNumber' : 0});	
+	       	   	 	}
+	       	   	 	else
+	       	   	 	{
+	       	   	 		widget.refresh(renderContext.properties);
+	       	   	 	}
+           }
+    }
+
+       /** 
+        * Refreshes the saved orders table.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+            
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["startNumber"])){
+            	
+            	  widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Update the toolbar icons after a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+        	
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (savedOrdersJS.updateCurrentOrder)
+              {
+            	  savedOrdersJS.initializeCurrentOrder();
+            	  savedOrdersJS.updateCurrentOrder = false;
+              }
+              savedOrdersJS.updateToolbar();
+              savedOrdersJS.checkAllIfNeeded();
+       }
+}),
+
+/** 
+* Declares a new refresh controller for the Shopping Cart display.
+*/
+wc.render.declareRefreshController({
+      id: "PendingOrderDisplayController",
+      renderContext: wc.render.getContextById("PendingOrderPaginationDisplay_Context"),
+      url: "",
+      formId: ""
+
+      /** 
+       * Refreshs the shopping cart area when an update to the order is made, 
+       * such as add/remove items or update quantity/promotions etc.
+       * This function is called when a modelChanged event is detected. 
+       * 
+       * @param {string} message The model changed event message
+       * @param {object} widget The registered refresh area
+       */
+      ,modelChangedHandler: function(message, widget) {
+             var controller = this;
+          
+             var renderContext = this.renderContext;
+             if(message.actionId in order_updated){
+            	 
+            	 	this.currentDesc = document.getElementById('OrderDescription_input').value;
+            	 	
+                    widget.refresh(renderContext.properties);
+             }
+      }
+
+      /** 
+       * Displays the discounts and promotions area upon a successful refresh.
+       * 
+       * @param {object} widget The registered refresh area
+       */
+      ,postRefreshHandler: function(widget) {
+             var controller = this;
+           
+             cursor_clear();
+             
+             if (this.currentDesc != document.getElementById('OldOrderDescription').value)
+             {
+            	var inputElement = document.getElementById('OrderDescription_input');
+            	if (inputElement != null && inputElement != 'undefined')
+            	{
+            		inputElement.value = this.currentDesc;
+            		dojo.removeClass(inputElement, 'savedOrderDetailsInputBorder'); 
+            		dojo.addClass(inputElement, 'savedOrderDetailsInputBorderWarning');
+            	}
+             }
+          
+      }
+
+}),
+
+/** 
+ * Declares a new refresh controller for the Browsing History ESpot.
+ */
+wc.render.declareRefreshController({
+       id: "BrowsingHistoryController",
+       renderContext: wc.render.getContextById("BrowsingHistoryContext"),
+       url: "",
+       formId: ""
+       
+       /** 
+        * Refreshes the Browsing History Espot area.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The model changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+		    var controller = this;
+		    var renderContext = this.renderContext;
+
+		    if(controller.testForChangedRC(["status"])){
+		    	widget.refresh(renderContext.properties);
+		    }	
+       }
+       
+       /** 
+        * Post handling for the Browsing History display.
+        * This function is called after a successful refresh. 
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+        	if(!document.getElementById('WC_ScrollingProductsESpot_EmptyImgContainer_BrowsingHistory')){
+        			document.getElementById('WC_LeftSidebarDisplay_div_5').style.display = 'block';
+        	}
+       }       
+       
+}),
+
+/** 
+* Declares a new refresh controller for the My Account Browsing History Display.
+*/
+wc.render.declareRefreshController({
+      id: "BrowsingHistoryDisplay_Controller",
+      renderContext: wc.render.getContextById("BrowsingHistoryDisplay_Context"),
+      url: "",
+      formId: ""
+     
+       /** 
+        * Refreshes the Browsing History display.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The model changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+		    var controller = this;
+		    var renderContext = this.renderContext;
+
+		    if(controller.testForChangedRC(["currentPage"]) || controller.testForChangedRC(["pageView"])){
+		    	widget.refresh(renderContext.properties);
+		    }	
+       }
+
+       /** 
+        * Post handling for the Browsing History display.
+        * This function is called after a successful refresh. 
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+        	cursor_clear();
+       }
+
+}),
+
+/** 
+ * Declares a new refresh controller for the Category Subscription e-marketing spot.
+ */
+wc.render.declareRefreshController({
+	id: "CategorySubscriptionController",
+	renderContext: wc.render.getContextById("CategorySubscriptionContext"),
+	url: "",
+	formId: ""
+	
+	/** 
+	 * Refreshes the category subscription area when a status update is made, such as subscribe or unsubscribe. 
+	 * This function is called when a modelChanged event is detected. 
+	 * 
+	 * @param {Object} message The model changed event message.
+	 * @param {Object} widget The registered refresh area.
+	 */
+	,modelChangedHandler: function(message, widget) {
+		var controller = this;
+		var renderContext = this.renderContext;
+		if(message.actionId == "AjaxCategorySubscribe"){
+			widget.refresh(renderContext.properties);
+		}
+	}
+
+	/** 
+	 * This function is called after a successful area refresh, and it clears the progress bar. 
+	 * 
+	 * @param {object} widget The registered refresh area
+	 */
+	,postRefreshHandler: function(widget) {
+		cursor_clear();
+		if(dojo.byId("CategorySubscriptionImage") == null){
+			dojo.animateProperty({
+				node: dojo.byId("CategorySubscriptionLink"),
+				duration: 1500,
+				properties: {
+					backgroundColor: {
+						start: "yellow",
+						end: dojo.style("CategorySubscriptionLink", "backgroundColor")
+					}
+				}
+			}).play();
+		}
+	}
+}),
+
+/** 
+ * Declares a new refresh controller for Recurring Order display with pagination
+ * in My Recurring Order page. 
+ */
+wc.render.declareRefreshController({
+       id: "RecurringOrderDisplayController",
+       renderContext: wc.render.getContextById("RecurringOrderDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of recurring orders.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+
+		,modelChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (message.actionId == "AjaxCancelSubscription") {
+                     controller.url = wc.render.getRefreshControllerById("RecurringOrderDisplayController").url;
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["beginIndex"])){
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for Subscription display with pagination
+ * in My Subscription page. 
+ */
+wc.render.declareRefreshController({
+       id: "SubscriptionDisplayController",
+       renderContext: wc.render.getContextById("SubscriptionDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of subscriptions.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+
+		,modelChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (message.actionId == "AjaxCancelSubscription") {
+                     controller.url = wc.render.getRefreshControllerById("SubscriptionDisplayController").url;
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["beginIndex"])){
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for Recent Recurring Orders 
+ * in My Account landing page. 
+ */
+wc.render.declareRefreshController({
+       id: "RecentRecurringOrderDisplayController",
+       renderContext: wc.render.getContextById("RecentRecurringOrderDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of recurring orders.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+
+		,modelChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (message.actionId == "AjaxCancelSubscription") {
+                     controller.url = wc.render.getRefreshControllerById("RecurringOrderDisplayController").url;
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for recent Subscription display
+ * in My Account landing page. 
+ */
+wc.render.declareRefreshController({
+       id: "RecentSubscriptionDisplayController",
+       renderContext: wc.render.getContextById("RecentSubscriptionDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of subscriptions.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+
+		,modelChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if (message.actionId == "AjaxCancelSubscription") {
+                     controller.url = wc.render.getRefreshControllerById("SubscriptionDisplayController").url;
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for Recurring Order child orders display with pagination
+ * in Recurring Order Details History page. 
+ */
+wc.render.declareRefreshController({
+       id: "RecurringOrderChildOrdersDisplayController",
+       renderContext: wc.render.getContextById("RecurringOrderChildOrdersDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of recurring orders.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["beginIndex"])){
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for Subscription child orders display with pagination
+ * in Subscription Details History page. 
+ */
+wc.render.declareRefreshController({
+       id: "SubscriptionChildOrdersDisplayController",
+       renderContext: wc.render.getContextById("SubscriptionChildOrdersDisplay_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the previous/next page of subscriptions.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["beginIndex"])){
+                     widget.refresh(renderContext.properties);
+              }
+       }
+
+       /** 
+        * Hide the progress bar upon a successful refresh.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              cursor_clear();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for Auto Suggest
+ */
+wc.render.declareRefreshController({
+       id: "AutoSuggestDisplayController",
+       renderContext: wc.render.getContextById("AutoSuggest_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Displays the keyword suggestions from the search index
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              widget.refresh(renderContext.properties);
+       }
+
+       /** 
+        * Display the results.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+			  var response = document.getElementById('suggestedKeywordResults');
+			  if(response == null) {
+			  	// No response or an error page.   Clear the contents.
+			  	document.getElementById("autoSuggestDynamic_Result_div").innerHTML = "";
+			  }
+			  showAutoSuggestIfResults();
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for the Add to cart modal
+ */
+wc.render.declareRefreshController({
+       id: "addToCartController",
+       renderContext: wc.render.getContextById("addToCartModalContext"),
+       url: "",
+       formId: ""
+
+    	,modelChangedHandler: function(message, widget) {
+		/* removed for PAR-1039	if((message.actionId == 'AjaxAddOrderItem') && (message.orderItemId != '') && (message.orderItemId != null)){
+		   		var param = [];
+	    		param.storeId = storeId + "";
+	    		param.catalogId = catalogId + "";
+	    		param.langId = langId + "";
+	    		param.orderItemId = message.orderItemId + "";
+	    		
+				var controller = this;
+			    var renderContext = this.renderContext;
+			    
+			    showAddToCart = true;
+			    
+			    
+				if((typeof productDisplayJS != 'undefined') && (productDisplayJS.svAddedPromo != null) && 
+						(productDisplayJS.svAddedPromo != 'undefined') && (dojo.trim(productDisplayJS.svAddedPromo) != '')){
+					param.svParentProductId = productDisplayJS.svParentProductId;
+					document.getElementById("svcheckbox_"+productDisplayJS.svAddedPromo).checked = false;
+					productDisplayJS.svAddedPromo = "";
+				}
+			    		    
+	    		widget.refresh(param);
+			}else{
+				showAddToCart = false;
+			}removed for PAR-1039*/
+		}
+        
+       ,postRefreshHandler: function(widget) {
+    	   var controller = this;
+           var renderContext = this.renderContext;
+           
+           cursor_clear();
+           //The dialog contents has changed..so destroy the old dialog with stale data..
+           destroyDialog();
+           if (showAddToCart) {
+        	   showAddToCartModal();
+	           showAddToCart = false;
+           }               
+       } 
+}),
+
+
+/** 
+ * Declares a new refresh controller for Cached Suggestions
+ */
+wc.render.declareRefreshController({
+       id: "AutoSuggestCachedSuggestionsController",
+       renderContext: wc.render.getContextById("CachedSuggestions_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        * Retrieves the cached suggestions used in the autosuggest box.
+        * This function is called when a render context changed event is detected. 
+        * 
+        * @param {string} message The render context changed event message
+        * @param {object} widget The registered refresh area
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              widget.refresh(renderContext.properties);
+       }
+
+       /** 
+        * Updates the cached suggestions.
+        * 
+        * @param {object} widget The registered refresh area
+        */
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              var response = document.getElementById('cachedSuggestions');
+              if(response == null) {
+                     // No response or an error page.   Clear the contents.
+                     document.getElementById("autoSuggestCachedSuggestions_div").innerHTML = "";
+              }
+              else {
+                     var scripts = response.getElementsByTagName("script");
+                     var j = scripts.length;
+                     for (var i = 0; i < j; i++){
+                            var newScript = document.createElement('script');
+                            newScript.type = "text/javascript";
+                            newScript.text = scripts[i].text;
+                            document.getElementById('autoSuggestCachedSuggestions_div').appendChild (newScript);
+                     }
+                     retrievedCachedSuggestions = true;
+                     var searchTerm = document.getElementById("SimpleSearchForm_SearchTerm").value;
+                     if(searchTerm.length > AUTOSUGGEST_THRESHOLD) {
+                            doStaticAutoSuggest(searchTerm);
+                     }
+              }
+       }
+}),
+
+/** 
+ * Declares a new refresh controller for 
+ */
+wc.render.declareRefreshController({
+       id: "noviosAddressModalRegistrySearchController",
+       renderContext: wc.render.getContextById("noviosAddressModalRegistrySearchResults_Context"),
+       url: "",
+       formId: ""
+
+       /** 
+        */
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              widget.refresh(renderContext.properties);
+       }
+		,postRefreshHandler: function(widget) {
+			cursor_clear();
+			/*
+			 * START: CenReqNum#311 getting input hudden variable to display error message for below scenarios.
+			 * 1) If the entered field value gives "0" results, then display the invalid message on corresponding fields.
+			 * 2) If event date is Expired(eventdate < currentDate - 7 days). then display the Expired event message on corresponding fields.
+			 * 3) If event date is In active(eventdate > currentDate + 90 days). then display the in active event message on corresponding fields.
+			 */
+			if(dojo.byId('noviosMessage')!=undefined && dojo.byId('noviosMessage').value != undefined){
+				var form = dojo.byId('search_registry').name;
+				var id = dojo.byId('noviosMessage').value;
+				var name = dojo.byId('noviosMessage').name;
+				if(name == 'noviosInvalid'){
+					if(id == "noviosFirstName"){
+						MessageHelper.formErrorHandleClient(id, MessageHelper.messages["ERROR_INVALID_NOVIOS_FIRST_NAME"]);
+						dojo.byId('novios_message').innerHTML = "No existen c&oacute;digos para tu b&uacute;squeda";
+					}else if(id == "noviosLastName"){
+						MessageHelper.formErrorHandleClient(id, MessageHelper.messages["ERROR_INVALID_NOVIOS_LAST_NAME"]);
+						dojo.byId('novios_message').innerHTML = "No existen c&oacute;digos para tu b&uacute;squeda";
+					}else if(id == "externalId"){
+						MessageHelper.formErrorHandleClient(id, MessageHelper.messages["ERROR_INVALID_NOVIOS_CODE"]);
+						dojo.byId('novios_message').innerHTML = "No existen c&oacute;digos para tu b&uacute;squeda";
+					}else if(id == "expiredEvent"){
+						dojo.byId('novios_message').innerHTML = "La informaci&oacute;n ingresada en uno o m&aacute;s de los campos no es correcta, por favor int&eacute;ntalo nuevamente.";
+					}else if(id == "ExpiredFirstName"){
+						dojo.byId('novios_message').innerHTML = "No existen c&oacute;digos para tu b&uacute;squeda";
+					}else if(id == "ExpiredLastName"){
+						dojo.byId('novios_message').innerHTML = "No existen c&oacute;digos para tu b&uacute;squeda";
+					}else{
+						// do nothing.
+					}
+				}else if(name == 'noviosInactive'){
+					 if(id == "externalId"){
+						MessageHelper.formErrorHandleClient(id, MessageHelper.messages["ERROR_INACTIVE_NOVIOS_CODE"]);
+						dojo.byId('novios_message').innerHTML = "No existen c&oacute;digos para tu b&uacute;squeda";
+					}else{
+						// do nothing.
+					}
+				}else if(name == 'noviosExpire'){
+					if(id == "externalId"){
+						MessageHelper.formErrorHandleClient(id, MessageHelper.messages["ERROR_EXPIRED_NOVIOS_CODE"]);
+						dojo.byId('novios_message').innerHTML = "No existen c&oacute;digos para tu b&uacute;squeda";
+					}else{
+						// do nothing.
+					}
+				}
+			}
+			/*
+			 * END: CenReqNum#311.
+			 */
+	    
+		} 
+}),
+
+wc.render.declareRefreshController({
+       id: "PhysicalStoreInvController",
+       renderContext: wc.render.getContextById("PhysicalStoreInvContext"),
+       url: "",
+       formId: ""
+
+       ,renderContextChangedHandler: function(message, widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+              if(controller.testForChangedRC(["itemId"])){
+            	  widget.refresh(renderContext.properties);
+              }
+       }
+
+       ,postRefreshHandler: function(widget) {
+              var controller = this;
+              var renderContext = this.renderContext;
+       }
+}),
+
+
+/**
+ * PAR 1157: One Click Payment Option
+ * Flow From PDP: AjaxOneClickAddOrderItem -> AjaxCENOneClickPayment -> CyberSourceRedirection
+ * Flow From MiniCart/ShoppingCart: AjaxCENOneClickPayment -> CyberSourceRedirection
+ * This service will executed when user click on compra rapida button
+ * from PDP. This will delete the exisiting order and create new order with selected sku from PDP.
+ */
+
+wc.service.declare({
+	id: "AjaxOneClickAddOrderItem",
+	actionId: "AjaxOneClickAddOrderItem",
+	url: getAbsoluteURL() + "AjaxOrderChangeServiceItemAdd",
+	formId: "",
+
+	successHandler: function(serviceResponse) {
+		var params = [];
+		
+		params.storeId = CommonContextsJS.storeId;
+		params.langId = CommonContextsJS.langId;
+		params.catalogId = CommonContextsJS.catalogId;
+		params.orderId = serviceResponse.orderId;
+		params.fromPage = "PDP";
+		
+		oneClick_Service = wc.service.getServiceById('AjaxCENOneClickPayment');
+		oneClick_Service.formId = "PDP";
+		
+		wc.service.invoke("AjaxCENOneClickPayment", params);
+	},
+
+	failureHandler: function(serviceResponse) {
+		
+		if(serviceResponse.exceptionData && serviceResponse.exceptionData.errorReason) {
+			MessageHelper.displayErrorMessage(MessageHelper.messages[serviceResponse.exceptionData.errorReason]);			
+		}
+		else if (serviceResponse.errorMessage) {
+			MessageHelper.displayErrorMessage(serviceResponse.errorMessage);
+		} 
+		else {
+			 if (serviceResponse.errorMessageKey) {
+				MessageHelper.displayErrorMessage(serviceResponse.errorMessageKey);
+			 }
+		}
+		
+		cursor_clear();
+		
+	}
+}),
+
+/**
+ * Ajax call to process the one click payment
+ */
+wc.service.declare({
+	id: "AjaxCENOneClickPayment",
+	actionId: "AjaxCENOneClickPayment",
+	url: getAbsoluteURL() + "AjaxCENOneClickPayment",
+	formId: "",
+
+	successHandler: function(serviceResponse) {
+	
+		// redirect the control to cbspunchout redirection jsp.
+		if(serviceResponse.redirectUrl){
+			console.debug("piid:"+serviceResponse.piId);
+			document.location.href = getAbsoluteURL().replace('http://','https://') + serviceResponse.redirectUrl.replace(/&amp;/g, '&');
+		}else{
+			document.location.href = getAbsoluteURL().replace('http://','https://') + "AjaxOrderItemDisplayView?storeId="+CommonContextsJS.storeId+"&langId=-5&catalogId="+CommonContextsJS.catalogId;
+		}
+		
+	},
+
+	failureHandler: function(serviceResponse) {
+		
+		if(serviceResponse.exceptionData && serviceResponse.exceptionData.errorReason) {
+			MessageHelper.displayErrorMessage(MessageHelper.messages[serviceResponse.exceptionData.errorReason]);
+		}
+		else if (serviceResponse.errorMessage) {
+			MessageHelper.displayErrorMessage(serviceResponse.errorMessage);
+		} 
+		else {
+			 if (serviceResponse.errorMessageKey) {
+				MessageHelper.displayErrorMessage(serviceResponse.errorMessageKey);
+			 }
+		}		
+				
+		cursor_clear();
+		
+		// Refresh the minicart if user clicked one click from PDP, Cart will be updated when user click on the 
+		// Compra Rapida from PDP, so refresh the minicart.
+		if(this.formId == "PDP"){
+			//if(serviceResponse && serviceResponse.errorCode && "CENERROO7" == serviceResponse.errorCode){
+				if(typeof(miniShopCartObject) == "object"){
+					wc.render.updateContext("MiniShoppingCartContext");
+				}
+			//}	
+		}					
+	}
+})

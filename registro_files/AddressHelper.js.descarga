@@ -1,0 +1,2662 @@
+﻿//-----------------------------------------------------------------
+// Licensed Materials - Property of IBM
+//
+// WebSphere Commerce
+//
+// (C) Copyright IBM Corp. 2006, 2010 All Rights Reserved.
+//
+// US Government Users Restricted Rights - Use, duplication or
+// disclosure restricted by GSA ADP Schedule Contract with
+// IBM Corp.
+//-----------------------------------------------------------------
+
+/** 
+ * @fileOverview This javascript is used by the store jsp's related to address creation and maintenance.
+ * @version 1.0
+ */
+
+/**
+ * The functions defined in this class enable address creation across the store.
+ * @class The functions and variables defined in this class validate the form input field values entered by 
+ * the customer. Another set of functions help in loading the UI for the state field when there is a change
+ * in the country field. Another set of functions enable creating an address in the shopcart page and
+ * guest user checkout page.
+ */
+/* Start REQ 397: MAPCITY */
+/** 
+ * This variable indicates whether or not the user is hovering over the autoSuggest results popup display.
+ * The value is initialized to false.
+ */
+var autoSuggestStreetHover = false;
+/** 
+ * This variable stores the index of the selected auto suggestion item when using up/down arrow keys.
+ * The value is initialized to -1.
+ */
+var autoStreetSelectOption = -1;
+/** 
+ * This variable stores the old search term used in the auto suggest search box
+ * The value is initialized to empty string.
+ */
+var autoSuggestStreetPreviousTerm = "";
+
+/** 
+ * This variable stores the URL of currently selected static autosuggest recommendation
+ * The value is initialized to empty string.
+ */
+var autoSuggestStreetURL = "";
+
+/** 
+ * This variable stores the index of the selected auto suggestion item when using up/down arrow keys.
+ * The value is initialized to -1.
+ */
+var autoStreetSelectOption = -1;
+
+/** 
+ * This variable stores the index offset of the first previous history term
+ * The value is initialized to -1.
+ */
+var historyStreetIndex = -1;
+/** 
+ * This variable controls the timer handler before triggering the autoSuggest.  If the user types fast, intermittent requests will be cancelled.
+ * The value is initialized to -1.
+ */
+var autoSuggestStreetTimer = -1;
+/** 
+ * This variable controls the delay of the timer in milliseconds between the keystrokes before firing the search request.
+ * The value is initialized to 250.
+ */
+var autoSuggestStreetKeystrokeDelay = 250;
+/** 
+ * This variable sets the total number of static autosuggest recommendations used for each static category/grouping.
+ * The value is initialized to 4.
+ */
+var TOTAL_STREETS_SUGGESTED = 8;
+
+/** 
+ * This variable sets the total number of previous search history terms.
+ * The value is initialized to 2.
+ */
+var TOTAL_STREETS_HISTORY = 2;
+
+wc.service.declare({
+	id: "AjaxCENCallRESTFulService",
+	actionId: "AjaxCENCallRESTFulService",
+	url: "AjaxCENCallRESTFulService",
+	formId: ""
+
+ /**
+  *  @param (object) serviceResponse The service response object, which is the
+  *  JSON object returned by the service invocation. 
+  */
+	,successHandler: function(serviceResponse) {
+		//wc.render.getRefreshControllerById('shippingAdddressDisplayAreaController').url = serviceResponse.url[0]; 
+		//wc.render.updateContext('shippingAddressContext',{shippingAddress:'0'});
+		//cursor_clear();
+//		console.debug("AjaxCENCallRESTFulService > successHandler",serviceResponse);
+		cursor_clear();
+		console.debug(serviceResponse);
+		if(serviceResponse && serviceResponse.successHandler && (typeof serviceResponse.withError === 'undefined')){
+			eval(serviceResponse.successHandler)(serviceResponse);
+		}else if(serviceResponse && serviceResponse.failureHandler && !(typeof serviceResponse.withError === 'undefined')){
+			eval(serviceResponse.failureHandler)(serviceResponse);
+		}
+	}
+/* END REQ 397: MAPCITY */	
+/**
+ * display an error message.
+ * @param (object) serviceResponse The service response object, which is the
+ * JSON object returned by the service invocation.
+ */
+	,failureHandler: function(serviceResponse) {
+		/*if (serviceResponse.errorMessage) {
+			//MessageHelper.displayErrorMessage(serviceResponse.errorMessage);
+			alert(serviceResponse.errorMessage);
+		} else {
+			if (serviceResponse.errorMessageKey) {
+				//MessageHelper.displayErrorMessage(serviceResponse.errorMessageKey);
+				alert(serviceResponse.errorMessageKey);
+			}
+		}*/
+//		console.debug("AjaxCENCallRESTFulService > failureHandler",serviceResponse);
+		cursor_clear();
+		if(serviceResponse && serviceResponse.failureHandler){
+			eval(serviceResponse.failureHandler)(serviceResponse);
+		}
+	}
+})
+/* REQ 397: MAPCITY */
+var centerMap;
+var streetList;
+var typingTimer;
+var doneTypingInterval = 700;
+AddressHelper = {
+	/* The name of the state field div. */
+	stateDivName : "stateDiv",
+	/* styling class for the state field. */
+	stateClass   : null,
+	 
+	/* To set the addressType for new shipping/billing Address*/
+	addressType : "ShippingAndBilling",
+	
+	/* To identify save billing address and then show popup for shipping address*/
+	saveBillingAddress : false,
+	
+	/*To identify the novios selection in shipping page*/
+	checkoutNovios : false,
+	
+	/*To Identify the form which is submitted*/
+	checkoutFormName : '',
+	
+	/*TO identify the novios address changed*/
+	noviosChanged : false,
+	
+	/**
+	 * This function sets the name for the state field.
+	 * @param {string} stateDivName The name to be set for the state field.  
+	 */
+	setStateDivName:function(stateDivName){
+		this.stateDivName = stateDivName; 
+	 },
+	
+	 /**
+	  * This function sets the styling class for the state field. 
+	  * @param {string} stateClass The name of the styling class to be set for the state field. 
+	  */
+	setStateClass:function(stateClass){
+		this.stateClass = stateClass;
+	},
+	
+	/** 
+	 * This function return an array of countries from a global variable called countries.
+	 * If that variable does not already exist then it will be created and populated from a JSON of country objects which should
+	 * have been loaded into a div on the page prior to calling this function.
+	 *
+	 * @returns {Array} countries An array of countries.
+	 **/
+	 getCountryArray:function()
+	{
+		
+		//If the countries array does not already exist then create it.
+		
+			if (document["countries"] == null)
+			{
+				countries = new Array();
+				var theDiv = document.getElementById("countryListSelectionHelper");
+		
+				if (typeof theDiv == 'undefined') return null;
+				var divJSON = eval('('+ theDiv.innerHTML +')');
+				var countriesObject = divJSON.countries;
+				
+				for (var i = 0; i < countriesObject.length; i++)
+				{
+					var countryObject = countriesObject[i];
+					countries[countryObject.code] = new Object();
+					countries[countryObject.code].name = countryObject.displayName;
+					countries[countryObject.code].countryCallingCode = countryObject.callingCode;
+					
+					if (countryObject.states.length > 0)
+					{
+						countries[countryObject.code].states = new Object();
+						for (var j = 0; j < countryObject.states.length; j++)
+						{
+							var state = countryObject.states[j];
+							countries[countryObject.code].states[state.code] = state.displayName;
+						}
+					}
+				}
+			}
+
+			return countries;
+			 
+	},
+	
+	/**
+	 * Method with generate the Comuna objects based on the JSON in AddresHelperComunaSelection.jspf
+	 */
+	getCommunesArray:function(){
+	 //If the regions array does not already exist then create it.
+		if (document["regions"] == null){
+			regions = new Array();
+			var theDiv = document.getElementById("communesListSelectionHelper");
+			
+			if (typeof theDiv == 'undefined'){
+				return null;
+			}
+			var divJSON = eval('('+ theDiv.innerHTML +')');
+			var regionsObject = divJSON.regions;
+					
+			for (var i = 0; i < regionsObject.length; i++)
+			{
+				var regionObject = regionsObject[i];
+				regions[regionObject.displayName] = new Object();
+				regions[regionObject.displayName].name = regionObject.displayName;
+				regions[regionObject.displayName].numCode = regionObject.numCode;
+						
+				if (regionObject.comunas.length > 0)
+				{
+					regions[regionObject.displayName].comunas = new Object();
+					for (var j = 0; j < regionObject.comunas.length; j++)
+					{
+						var communa = regionObject.comunas[j];
+		/* REQ 397: MAPCITY: MATCH COMUNA */
+						regions[regionObject.displayName].comunas[communa.displayName] = new Object();
+						regions[regionObject.displayName].comunas[communa.displayName].name = communa.displayName;
+						if(typeof communa.mapCityComuna != 'undefined'){
+							regions[regionObject.displayName].comunas[communa.displayName].mapCityComuna = communa.mapCityComuna;							
+						}else{
+							regions[regionObject.displayName].comunas[communa.displayName].mapCityComuna = null;
+						}
+						
+						if(typeof communa.mapCityXcom != 'undefined')
+							regions[regionObject.displayName].comunas[communa.displayName].mapCityXcom = communa.mapCityXcom;
+						else
+							regions[regionObject.displayName].comunas[communa.displayName].mapCityXcom = null;
+						
+						if(typeof communa.mapCityYcom != 'undefined')
+							regions[regionObject.displayName].comunas[communa.displayName].mapCityYcom = communa.mapCityYcom;
+						else
+							regions[regionObject.displayName].comunas[communa.displayName].mapCityYcom = null;
+		/* REQ 397: MAPCITY: END MATCH COMUNA */
+					}
+				}
+			}
+		}
+		return regions;	 
+	},
+
+	enableRutValidation: function(countryDropDownid, logonId){
+		var country = dojo.byId(countryDropDownid);
+		var logon = dojo.byId(logonId);
+
+		// If selected country is Chile then enable RUT validation for logonId field
+		if (country.value == 'CL') {
+			dojo.attr(logon,'maxlength',10);
+			this.rutOnkeyupEvtHandle = dojo.connect(logon, 'onkeyup', function(evt) {
+				validateRut(logonId);
+			});
+
+			this.rutOnchangeEvtHandle = dojo.connect(logon, 'onchange', function(evt) {
+				validateRut(logonId);
+			});
+			
+			this.rutOnblurEvtHandle = dojo.connect(logon, 'onblur', function(evt) {
+				validateRut(logonId);
+			});
+
+		} else {  /* Remove event hangler */
+			dojo.attr(logon,'maxlength',254);
+			if(this.rutOnkeyupEvtHandle) {
+				dojo.disconnect(this.rutOnkeyupEvtHandle);
+				this.rutOnkeyupEvtHandle = null;
+			}
+
+			if(this.rutOnchangeEvtHandle) {
+				dojo.disconnect(this.rutOnchangeEvtHandle);
+				this.rutOnchangeEvtHandle = null;
+			}
+
+			if(this.rutOnblurEvtHandle) {
+				dojo.disconnect(this.rutOnblurEvtHandle);
+				this.rutOnblurEvtHandle = null;
+			}
+
+		}
+
+	},
+		
+	/**
+	 * This function will load the state field depending on the country selection.
+	 * @param {string} formName  The name of the address form containing the state field and country field.
+	 * @param {string} stateDiv  The name of the state field.
+	 * @param {string} id The id of the state field to be created.
+	 * @param {boolean} keepCurrentState A true or false value used to determine whether to keep the current value in the state field or to remove it.
+	 * @param {string} copyValue The value to be copied to the newly generated state field.
+	 */
+	loadStatesUI:function(formName,paramPrefix,stateDiv,id, keepCurrentState, copyValue){
+		 
+		this.getCountryArray();
+		var form = document.getElementById(formName);
+		if(paramPrefix == null || paramPrefix == 'undefined' || paramPrefix == ""){
+			paramPrefix = "";
+		}
+		var newid = paramPrefix + id;
+		var currentState;
+		
+		if (keepCurrentState != null && keepCurrentState != 'undefined' && keepCurrentState == true)
+		{
+			currentState = document.getElementById(newid).value;
+		}
+		else
+		{
+			currentState = "";
+		}
+		
+		if(copyValue != null && copyValue != 'undefined' && copyValue != '')
+		{
+			currentState = copyValue;
+		}
+		if(id=="_state1"){
+		this.setStateClass("form_input");
+		var currentCountryCode =form[paramPrefix + "_country"].value;}
+		else{
+		var currentCountryCode =form[paramPrefix + "country"].value;} 
+
+		var stateDivObj = document.getElementById(stateDiv);
+		if(dojo.isIE){
+		var stateClass = document.getElementById(newid).getAttribute("className");}/* For IE */
+		else {var stateClass=document.getElementById(newid).getAttribute("class")};
+
+		if(stateClass!="drop_down_country")
+		this.setStateClass(stateClass);
+		 while(stateDivObj.hasChildNodes()) {
+			stateDivObj.removeChild(stateDivObj.firstChild);
+		}
+
+		if (countries[currentCountryCode].states) {
+			/* switch to state list. */
+			stateDivObj.setAttribute("className","styled_select");
+			stateDivObj.setAttribute("class","styled_select");
+			stateDivObj.appendChild(this.createStateWithOptions(paramPrefix, currentCountryCode, currentState,id));
+		} else {
+			/* switch to state text input. */
+			stateDivObj.setAttribute("className","");
+			stateDivObj.setAttribute("class","");
+			stateDivObj.appendChild(this.createState(paramPrefix, currentState, id));
+		}
+	},
+	
+	/**
+	 * While loading a saved address check for a selected Comuna and mark as selected on the option list.
+	 */
+	checkForSelectedComuna:function(formName){
+		if(document.getElementById('city')){
+			var comunaDropDown = document.getElementById('city');
+			if(comunaDropDown.options.length > 0){
+				var copyComuna = comunaDropDown.options[comunaDropDown.selectedIndex].value;
+				this.loadCommunes(formName,'','communesDiv','city', '', copyComuna);
+			}else{
+				this.loadCommunes(formName,'','communesDiv','city');
+			}
+		}
+	},
+	
+	/**
+	 * Generate options for Comuna drop down based on Regions selected.
+	 */
+	loadCommunes:function(formName, paramPrefix, comunaDiv, id, keepCurrentComuna, copyValue){
+		this.getCommunesArray();
+		var form = document.getElementById(formName);
+		if(paramPrefix == null || paramPrefix == 'undefined' || paramPrefix == ""){
+			paramPrefix = "";
+		}
+		var newid = paramPrefix + id;
+		var currentComuna;
+		
+		if (keepCurrentComuna != null && keepCurrentComuna != 'undefined' && keepCurrentComuna == true)
+		{
+			currentComuna = document.getElementById(newid).value;
+		}
+		else
+		{
+			currentComuna = "";
+		}
+		
+		if(copyValue != null && copyValue != 'undefined' && copyValue != '')
+		{
+			currentComuna = copyValue;
+		}
+		if(id=="city1"){
+			var currentRegionCode =form[paramPrefix + "state1"].value;
+		}
+		else{
+			var currentRegionCode =form[paramPrefix + "state"].value;
+		} 
+
+		var communeDivObj = document.getElementById(comunaDiv);
+
+		while(communeDivObj.hasChildNodes()) {
+			communeDivObj.removeChild(communeDivObj.firstChild);
+		}
+
+		if ((regions[currentRegionCode] != null) && (regions[currentRegionCode] != 'undefined') && (regions[currentRegionCode] != '')) {
+			/* switch to state list. */
+			communeDivObj.setAttribute("className","styled_select");
+			communeDivObj.setAttribute("class","styled_select");
+			communeDivObj.appendChild(this.createCommunaWithOptions(paramPrefix, currentRegionCode, currentComuna, id));
+		}
+		
+	},
+	
+	
+	/**
+	 * Create options for Comuna Drop Down
+	 */
+	createCommunaWithOptions:function(paramPrefix, currentRegionCode, currentComuna, id){
+		this.getCommunesArray();
+		var communeSelect = document.createElement("select");
+		/* Included for CEN Req#909 */
+		var comuneRemove = "Corral";
+		communeSelect.setAttribute("id", paramPrefix + id);
+		if(id=="_city1"){
+		communeSelect.setAttribute("name", paramPrefix + "_city");}
+		else{
+		communeSelect.setAttribute("name", paramPrefix + "city");}
+		communeSelect.setAttribute("class","drop_down_country");
+		communeSelect.setAttribute("className","drop_down_country");
+		/*clear old options. */
+		communeSelect.options.length = 0;
+		
+		// Start Changes to add select message as default in the list menu: 27 Nov 13
+		var defaultOption = document.createElement("option");
+		communeSelect.options[0] = defaultOption;
+		defaultOption.text = "Selecciona una comuna";
+		defaultOption.value = "Selecciona una comuna";
+		// End: 06 Dec 13
+		
+		/* add all states. */
+		for (commune_code in regions[currentRegionCode].comunas) {
+		/* Included for CEN Req#909 */	
+			if ("" != commune_code && commune_code != comuneRemove){
+			aOption = document.createElement("option");
+			communeSelect.options[communeSelect.length] = aOption;
+		/*REQ 397: MAPCITY: add .name property to the comunas reference */
+			aOption.text = regions[currentRegionCode].comunas[commune_code].name;
+			aOption.value = commune_code;
+		/*REQ 397: MAPCITY: add .name property to the comunas reference */
+			if (commune_code == currentComuna || regions[currentRegionCode].comunas[commune_code].name == currentComuna) {
+				aOption.selected = true;
+			}
+		}
+}
+		/*REQ 397: MAPCITY*/
+		if(id.indexOf('ShoppingCartAddressEntryForm') < 0){
+			communeSelect.setAttribute("onChange","javascript:AddressHelper.comunaSelectOnChange(this);");
+		}
+		return communeSelect;
+	},	
+	/*REQ 397: MAPCITY COMMON METHOD*/
+	getValueSelecter:function(_nameElement){
+		var currentCode = this.findElementsForMapCity(_nameElement+'1');
+		if(currentCode == null || typeof currentCode === 'undefined')
+			currentCode = this.findElementsForMapCity(_nameElement);
+		if(currentCode != null && !(typeof currentCode === 'undefined'))
+			currentCode = currentCode.value;
+		return currentCode;
+	},
+	/*REQ 397: MAPCITY COMMON METHOD*/
+	getValueSelectedRegion: function (){		
+		return this.getValueSelecter("state");
+	},
+	/*REQ 397: MAPCITY COMMON METHOD*/
+	getValueSelectedComuna: function (){
+		return this.getValueSelecter("city");
+	},
+	/*REQ 397: MAPCITY SELECTER COMUNA EVENT ONCHANGE METHOD*/
+	comunaSelectOnChange: function (_select){
+		console.debug("mapCity > Start comunaSelectOnChange('"+_select.value+"')");
+		if (!(typeof mapcityEnabled === 'undefined') && mapcityEnabled) {
+			if(_select.value.indexOf("selecciona") < 0){
+				AddressHelper.enableAddressFormElements(true,true,'');
+				AddressHelper.centerInMap(_select.value);				
+			}else{
+				AddressHelper.enableAddressFormElements(false);
+				AddressHelper.setAddressMapAttrs('0', '0', '3');
+			}			
+		}else{
+			if(!(typeof flagMapCity === 'undefined'))
+				this.setAddressMapAttrs('0', '0', flagMapCity);
+		}
+		console.debug("mapCity > End comunaSelectOnChange('"+_select.value+"')");
+	},
+	/*REQ 397: MAPCITY PAGELOAD ONLY IN EDIT MODE*/
+	mapRefreshInEditMode: function (){
+		console.debug("mapCity > Start mapRefreshInEditMode()");
+		//var renderContext = wc.render.getContextById("addressBookContext");
+		if (mapcityEnabled) {
+			//var v_city = this.getValueSelectedComuna();
+			//AddressHelper.centerInMap(v_city);
+		}else{
+			AddressHelper.setAddressMapAttrs('0', '0', flagMapCity);
+		}
+		console.debug("mapCity > End mapRefreshInEditMode()");
+	},
+	/*REQ 397: REQ 397: MAPCITY FIND THE MATCH OF THE SELECTED COMUNA*/
+	findMatchOfSelectedComuna: function(currentComuna, needGetXYCom){		
+		this.getCommunesArray();
+		var currentRegionCode = this.getValueSelectedRegion();
+		var v_text = null;
+		if(currentRegionCode != null && !(typeof currentRegionCode === 'undefined') 
+				&& currentComuna != null && !(typeof currentComuna === 'undefined')){	
+			try{
+				if(currentComuna.indexOf("selecciona") < 0){
+					if(needGetXYCom){
+						v_text = {Xcom: regions[currentRegionCode].comunas[currentComuna].mapCityXcom,
+								Ycom: regions[currentRegionCode].comunas[currentComuna].mapCityYcom};
+					}else{
+						v_text = regions[currentRegionCode].comunas[currentComuna].mapCityComuna;
+					}					
+				}
+				else
+					currentComuna = '';
+			}catch(ex){
+				console.warn("for the '"+currentComuna+"' comuna with the property mapCityComuna, mapCityXcom, or mapCityYcom not found..");
+			}
+		}
+		return v_text?v_text:currentComuna;
+	},
+	/*REQ 397: REQ 397: MAPCITY FIND THE MATCH OF THE SELECTED REGION*/
+	findMatchOfSelectedRegion: function(currentValueRegion){
+		this.getCommunesArray();		
+		if(currentValueRegion != null && typeof currentValueRegion != 'undefined'){	
+			var v_text = regions[currentValueRegion].numCode;	
+		}
+		return v_text?v_text:currentValueRegion;
+	},
+	
+	/*REQ 397: REQ 397: MAPCITY*/
+	centerInMap: function(currentComuna){
+		console.debug("mapCity > Start centerInMap('"+currentComuna+"')");
+		if (mapcityEnabled) {
+			var mc = this.findMatchOfSelectedComuna(currentComuna, true);
+			console.debug("mapCity > Comuna:'"+currentComuna+"' coordinates found.",mc);
+			if(mc && mc.Xcom && mc.Ycom){
+				var lonlat = new MapCity.Maps.LonLat(mc.Xcom, mc.Ycom);
+				map.setCenter(lonlat);
+				geo_point.move(lonlat);
+				if(map && map.olMap && map.olMap.zoomTo){
+					map.olMap.zoomTo(12);
+				}
+			}			
+			//var suggest = new MapCity.Services.Geocoding.SearchDistrict(); // districtSuggest()
+//			var suggest = new MapCity.Services.Geocoding.SearchDistrict();
+//			suggest.get( {
+//				district : this.findMatchOfSelectedComuna(currentComuna),
+//				simplify : 0.0001
+//			}, function(json, product, districtsuggest) {
+//				// Hacer Algo con el retorno
+//				console.debug("mapCity > centerInMap > SearchDistrict >  response = ",json);
+//					if (json.totalCount > 0) {
+//						try{
+//							var comuna = OpenLayers.Geometry.fromWKT(json.searchdistrict[0].wkt);
+//							var centroid = comuna.getCentroid();
+//							var lonlat = new MapCity.Maps.LonLat(centroid.x,centroid.y);
+//							map.setCenter(lonlat);
+//							geo_point.move(lonlat);
+//							AddressHelper.setAddressMapAttrs(''+centroid.y,''+centroid.x, '0');	
+//						}catch (e) {
+//							console.error(e.message);
+//						}
+//					}else{
+//						AddressHelper.setAddressMapAttrs('0','0', '1');
+//					}
+//				});
+		}else{
+			AddressHelper.setAddressMapAttrs('0', '0', flagMapCity);
+		}
+//		console.debug("mapCity > End centerInMap('"+currentComuna+"')");
+		
+	},	
+	//Detect keystroke and only execute after the user has finish typing
+	delayExecute: function(){
+	    clearTimeout(typingTimer);
+	    typingTimer = setTimeout(
+	        function(){AddressHelper.searchAddress(false,null,null
+	        		    ,AddressHelper.findElementsForMapCity('address1').value, null);},
+	        doneTypingInterval
+	    );
+	    return true;
+	},
+	/*REQ 397: MAPCITY*/
+	refreshMap: function (){
+		if(this.validateFormForRefreshMap())
+			this.searchAddress(true,null
+					,this.findMatchOfSelectedComuna(this.getValueSelectedComuna())
+					,this.findElementsForMapCity('address1').value
+					,this.findElementsForMapCity('address2').value);
+	},
+	/*REQ 397: MAPCITY*/
+	validateFormForRefreshMap: function(){
+		var comuna = this.findElementsForMapCity('city');
+		// Changes below line for select default alert on 6 dec 13
+		if(trim(comuna.value) == ""  || comuna.value == "Selecciona una comuna")
+		{ 
+			MessageHelper.formErrorHandleClient(comuna.id, MessageHelper.messages["ERROR_ComunaEmpty"]);
+			return false;
+		}
+		if(!MessageHelper.isValidUTF8length(comuna.value, 128)){
+			MessageHelper.formErrorHandleClient(comuna.id, MessageHelper.messages["ERROR_ComunaTooLong"]);
+			return false;
+		}
+		var address1 = this.findElementsForMapCity('address1');
+		if(trim(address1.value) == ""){ 
+			MessageHelper.formErrorHandleClient(address1.id, MessageHelper.messages["ERROR_AddressEmpty"]);
+			return false;
+		}
+		var specialCharactersRegex1 = new RegExp(/^[A-Za-z0-9_\s.,-\/]/);
+		isValid = this.validateAccentedCharacters(address1.value,specialCharactersRegex1);
+		var address3 = this.findElementsForMapCity('address3');
+		if(address3 != null && !isValid){ 
+			MessageHelper.formErrorHandleClient(address1.id,MessageHelper.messages["ERROR_INVALID_CALLE"]); 
+			return false;
+		}
+		if(!MessageHelper.isValidUTF8length(address1.value, 100)){ 
+			MessageHelper.formErrorHandleClient(address1.id, MessageHelper.messages["ERROR_AddressTooLong"]); 
+			return false;
+		}
+		var address2 = this.findElementsForMapCity('address2');
+		if(trim(address2.value) == ""){ 
+			MessageHelper.formErrorHandleClient(address2.id, MessageHelper.messages["ERROR_HouseNumEmpty"]);
+			return false;
+		}
+		if(!MessageHelper.isValidUTF8length(address2.value, 7)){ 
+			MessageHelper.formErrorHandleClient(address2.id, MessageHelper.messages["ERROR_HouseNumTooLong"]); 
+			return false;
+		}
+		return true;
+	},
+	/*REQ 397: MAPCITY Tuning */
+	searchAddress: function(centerAddressInMap,v_region,v_district,v_street,v_number, drawSpecial, _tuning){
+		console.debug("mapCity > Start searchAddress(centerAddressInMap = '"+
+			centerAddressInMap+"'+, v_region='"+v_region+"', v_district = '"+v_district+"', v_street = '"+
+			v_street+"', v_number = '"+v_number+"')");
+			if(mapcityEnabled){
+				if(centerAddressInMap && v_district && v_street && v_number){
+					var direccion = v_street+' '+v_number+' '+v_district;
+					console.debug("mapCity > searchAddress > direccion >",direccion); 					
+					AddressHelper.findLocalization(direccion, v_street, drawSpecial, _tuning);
+				}				
+			}else{
+				AddressHelper.setAddressMapAttrs('0', '0', flagMapCity);
+			}	
+		console.debug("mapCity > End searchAddress()");
+	},
+	/*REQ 397: MAPCITY*/
+	searchAddressByEntry: function(){
+		if(mapcityEnabled){
+			console.debug("mapCity > Start searchAddressByEntry");
+			var city = this.getValueSelectedComuna();
+			var address1 = this.findElementsForMapCity('address1');
+			var address2 = this.findElementsForMapCity('address2');
+			var searched = false;
+			if(city && address1 && address2){
+				if(city.indexOf("selecciona") < 0 
+						&& address1.value && trim(address1.value) != ''
+							&& address2.value && trim(address2.value) != ''){
+					var direccion = trim(address1.value)+' '+trim(address2.value)+' '+city;
+					this.findLocalization(direccion);
+					searched = true;
+				}
+			}
+			console.debug("mapCity > End searchAddressByEntry > searched = "+searched);
+		}
+	},
+	/*REQ 397: MAPCITY*/
+	setAddressMapAttrs: function( _marker_lat, _marker_lon, flag){
+		if(_marker_lat != null){
+			if(_marker_lat === '' || _marker_lat === '0'){
+				_marker_lat = '-00.0000000000000';
+			}else {
+				//_marker_lat = _marker_lat.replace('.','#');
+			} 
+			document.getElementById('addressLat').value = _marker_lat;
+		}
+		if(_marker_lon != null){
+			if(_marker_lon === '' || _marker_lon === '0'){
+				_marker_lon = '00.0000000000000';
+			}else {
+				//_marker_lon = _marker_lon.replace('.','#');
+			} 
+			document.getElementById('addressLon').value = _marker_lon;
+		}
+		if(flag != null)
+			document.getElementById('addressFlag').value = flag;//flag;// ADDRESS INVALID
+	},
+	/*MAP CITY*/
+	enableAddressFormElements: function(isEnable, _cleanAll, _valueAddress1){
+		console.debug("mapCity > Start enableAddressFormElements("+isEnable+")");
+			if(mapcityEnabled){
+				var elements = this.findElementsForMapCity();//['address1', 'address2', 'addressField2'];
+				if(elements != null){
+					var tmp = null;
+					var index = 0;
+					if((isEnable != null && !(typeof isEnable === 'undefined') 
+							&& (isEnable === true || isEnable === 'true'))){
+						tmp = elements[0];
+						tmp.removeAttribute('disabled');
+						if(_cleanAll)
+							tmp.value = '';
+						if(_valueAddress1 != null && !(typeof _valueAddress1 === 'undefined')){
+							_valueAddress1 = trim(_valueAddress1);
+							if(_valueAddress1 != ''){							
+								for(index = 1; index < elements.length; index++){
+									tmp = elements[index];
+									tmp.value = '';
+									tmp.removeAttribute('disabled');
+								}
+							}else{							
+								for(index = 1; index < elements.length; index++){
+									tmp = elements[index];
+									tmp.value = '';
+									tmp.setAttribute('disabled', 'true');
+								}
+							}
+						}
+					}else{
+						for(index = 0; index < elements.length; index++){
+							tmp = elements[index];
+							if(_cleanAll)
+								tmp.value = '';
+							tmp.setAttribute('disabled', 'true');
+						}
+					}
+				}
+			}else{
+				AddressHelper.setAddressMapAttrs('0', '0', flagMapCity);
+			}	
+			
+		console.debug("mapCity > End enableAddressFormElements("+isEnable+")");
+	},
+/*REQ 397: MAPCITY*/
+	findElementsForMapCity:function(_fieldName){
+		console.debug("mapCity > Start findElementsForMapCity()");
+		var formsName = ["shippingAddressCreateEditFormDiv_1"];
+		if(dojo.byId('NuevaDireccionContainer').style.display == 'block'){
+			formsName = ["AddressForm"];
+		}
+		var form = null;
+		for(var i = 0; i < formsName.length; i++){
+			form = document.forms[formsName[i]];
+			if(form != null && !(typeof form === 'undefined')){
+				if(_fieldName && trim(_fieldName) != ''){
+					var elem = form[_fieldName];
+					if(elem) return elem;
+					else continue;
+				}else{
+					var elementsName = ['address1', 'address2', 'addressField2'];				
+					var elements = new Array();
+					for(var j = 0; j < elementsName.length; j++){
+						var elem = form[elementsName[j]];
+						if(elem)
+							elements.push(elem);
+					}
+					return elements.length>0?elements:null;
+				}
+			}
+		}
+		return null;
+		console.debug("mapCity > End findElementsForMapCity()");
+	},
+/*REQ 397: MAPCITY*/
+	getRenderContextType:function(){
+		console.debug("mapCity > Start getRenderContextType()");
+		var renderContext = wc.render.getContextById("addressBookContext");
+		var type = '';
+		if(renderContext != null && !(typeof renderContext === 'undefined') && renderContext.properties["type"]){
+			type = renderContext.properties["type"];
+			var elem = null;
+			var elemId = 'ABF_VH_TypeId';
+			if(type != null && !(typeof type === 'undefined') && (type === 'add' || type === 'edit') ){					
+				elem = dojo.byId(elemId);
+				if(elem != null && !(typeof elem === 'undefined')){
+					dojo.attr(elem, 'value', type);
+				}else{
+					dojo.create("div", {
+						id:'Div_'+elemId,
+						style: {display: "none"},
+						innerHTML: "<input type=\"hidden\" id=\""+elemId+"\" value=\""+ type +"\"/>",
+					}, dojo.byId('NuevaDireccionWidgetHidden'),'last');
+				}
+			}else if(type != null && !(typeof type === 'undefined') && type === '0' ){
+				elem = dojo.byId(elemId);
+				if(elem != null && !(typeof elem === 'undefined')){
+					type = elem.value;
+				}
+			}
+		}
+		console.debug("mapCity > End getRenderContextType("+type+")");
+		return type;
+	},
+	/*REQ 397: MAPCITY*/
+	findLocalization: function (_direccion, v_street, drawSpecial, _tuning){
+		if(mapcityEnabled){
+			console.debug("mapCity > Start findLocalization("+_direccion+")");
+			// dojo.io.script is an external dependency, so it must be required
+			var params = [];
+			//mapCityNormalizadorWsUrl+"?direccion="+encodeURIComponent(_direccion);
+			//params.direccion = encodeURIComponent("?direccion="+_direccion);
+			params.direccion = encodeURIComponent("&direccion="+_direccion);
+			params.v_street = v_street;
+			params.service = "normalizador";
+			var addressId = "";
+			if(_tuning){
+				params.service = "get_coordinates";
+				var elem = dojo.byId("WC_AccountForm_inputs_2");
+				if(elem){
+					addressId = elem.value;
+				}
+			}
+			params.successHandler = "AddressHelper.findLocalizSuccess";
+			params.failureHandler = "AddressHelper.findFailure";
+			params.param1 = _direccion+(drawSpecial?"##"+drawSpecial:"")+(_tuning?"_T_"+addressId:"");
+			this.setPositionCursor();
+			requestSubmitted = true;			
+			cursor_wait();
+			wc.service.invoke("AjaxCENCallRESTFulService", params);
+			console.debug("mapCity > End findLocalization("+_direccion+")");
+		}
+	},
+	/*REQ 397: MAPCITY*/
+	setPositionCursor: function(_startElementId){
+		var CONST_ELEMENT_ID = 'confOKButton';
+		var cursor = dojo.byId('progress_bar');
+		cursor.style.zIndex = "999999999999999";
+		if(typeof _startElementId === 'undefined')
+			_startElementId = CONST_ELEMENT_ID;
+		var elements = dojo.query("div[id^=\""+_startElementId+"\"]");
+		var modalEnabled = false;
+		for(var index = 0; index < elements.length; index++){
+			if(elements[index]){
+				modalEnabled = elements[index].style.display === 'block';
+				if(modalEnabled){
+					setCurrentId(elements[index].id);
+					break;
+				}
+			}
+		}
+		if(currentId === "" || currentId.indexOf(CONST_ELEMENT_ID) < 0){
+			setCurrentId('notaPieMap');
+		}
+	},
+	//REQ 397: MAPCITY
+	/**
+	 * [georeferencia]: El estado de la normalización:
+	    4: Encuentra el nombre de la calle y la altura en la comuna informada.
+		5: La dirección se normalizó a nivel de comuna.
+		A: El nombre de la calle está en la comuna pero la altura no está en un rango válido.
+		B: El nombre de la calle no ha sido encontrado en el diccionario de calles
+		O: En la dirección original no viene informada la altura.
+		M: La dirección incompleta.
+		E: No hay cobertura en la cartografía.
+	*/
+	findLocalizSuccess: function (serviceResponse){
+		console.debug("mapCity > Start findLocalizSuccess > ", serviceResponse);
+		var respObj = JSON.parse(serviceResponse.jsonRespone, true);
+		console.debug("mapCity > findLocalizSuccess > JSON parse > ",respObj);
+		if(respObj){
+			var results = respObj.results[0];
+			var direccion = results.direccion;
+			var msjTmp = '';
+			if(direccion.estado && direccion.estado === '4')
+				msjTmp = 'Se encontr\u00F3 el nombre de la calle y la altura en la comuna informada.';
+			else if(direccion.estado === '5')
+				msjTmp = 'La direcci\u00F3n se normaliz\u00F3 a nivel de comuna.';
+			else if(direccion.estado === 'A')
+				msjTmp = 'El nombre de la calle est\u00E1 en la comuna pero la altura no est\u00E1 en un rango v\u00E1lido.';
+			else if(direccion.estado === 'B')
+				msjTmp = 'El nombre de la calle no ha sido encontrado en el diccionario de calles.';
+			else if(direccion.estado === 'O')
+				msjTmp = 'En la direcci\u00F3n original no viene informada la altura.';
+			else if(direccion.estado === 'M')
+				msjTmp = 'La direcci\u00F3n incompleta.';
+			else if(direccion.estado === 'E')
+				msjTmp = 'No hay cobertura en la cartograf\u00EDa.';
+			if(msjTmp != '')
+				console.debug("mapCity > findLocalizSuccess > result > "+msjTmp);		
+			
+			var caracterizacion = results.caracterizacion;
+			var location = results.location;
+			
+			if(true == caracterizacion.direccion_valida){
+				//ADDRESS FOUND
+				var lon = parseFloat(location.lng);
+				var lat = parseFloat(location.lat);
+				console.debug("mapCity > findLocalizSuccess > result > lon = "+lon+", lat = "+lat);
+				AddressHelper.setAddressMapAttrs(''+lat, ''+lon, '0');	
+				if(undefined != map){
+					var lonlat = new MapCity.Maps.LonLat(lon, lat);
+					map.setCenter(lonlat);	
+					geo_point.move(lonlat);	
+					if(map && map.olMap && map.olMap.zoomTo){
+						map.olMap.zoomTo(16);
+					}
+				}
+				var address1 = AddressHelper.findElementsForMapCity('address1');
+				if(address1 && direccion.nombre_via_largo){
+					if(serviceResponse.param1.substring(0,serviceResponse.param1.indexOf(' ')).toLowerCase() == direccion.nombre_via_largo.toLowerCase() ){
+						address1.value = direccion.nombre_via_largo;
+						if(direccion.anexo){
+							address1.value += " "+direccion.anexo;
+						}
+					}
+				}
+				AddressHelper.hideAlertMessageSpecial();
+			}else if(false == caracterizacion.direccion_valida){
+				var str = ""+serviceResponse.param1;	
+				AddressHelper.setAddressMapAttrs('0', '0', '3');
+				var address1 = AddressHelper.findElementsForMapCity('address1');
+				if(address1 && direccion.nombre_via_largo){
+					if(serviceResponse.param1.substring(0,serviceResponse.param1.indexOf(' ')).toLowerCase() == direccion.nombre_via_largo.toLowerCase() ){
+						address1.value = direccion.nombre_via_largo;
+						if(direccion.anexo){
+							address1.value += " "+direccion.anexo;
+						}	
+					}
+					
+				}
+				if(str && str.indexOf("##") > -1){
+					//DRAW SPECIAL POPUP div#alertMessageContainer
+					AddressHelper.showAlertMessageSpecial();
+				}else{
+					//ADDRESS NOT FOUND					
+					var message = "No hemos encontrado resultados para \"<b>"+str+"</b>\" en el mapa. "+
+						"A\u00FAn as\u00ED, puedes continuar tu compra y el despacho se enviar\u00E1 a la direcci\u00F3n ingresada.";
+					//MessageHelper.displayErrorMessage(message);
+					//alert(message);		
+					var elem = dojo.byId('caja-no-encontrado-texto');
+					if(elem){
+						elem.innerHTML = message;
+						AddressHelper.showAlertModal();
+					}else MessageHelper.displayErrorMessage(message);
+				}				
+			}else{
+				//FLAG's VALUE UNDEFINED OR VALUE NOT EXPECTED
+				AddressHelper.setAddressMapAttrs('0', '0', '1');
+			}
+		}
+		AddressHelper.populateConfirmModal();
+		AddressHelper.disableConfirmOkButton(false);
+		AddressHelper.changeConfirmationTitlePopup(false);
+		console.debug("mapCity > End findLocalizSuccess");
+	},
+	/*REQ 397: MAPCITY*/
+	disableConfirmOkButton: function(_disable){
+		if(mapcityEnabled){
+			var elem1 = dojo.query("div[id^=\"confOKButton1\"]"), elem2 = dojo.query("div[id^=\"confOKButton2\"]");
+			if(_disable){
+				for(var index = 0; index < elem1.length; index++){
+					elem1[index].style.display = "block";					
+				}
+				for(var index = 0; index < elem2.length; index++){
+					elem2[index].style.display = "none";					
+				}
+			}else{
+				for(var index = 0; index < elem1.length; index++){
+					elem1[index].style.display = "none";					
+				}
+				for(var index = 0; index < elem2.length; index++){
+					elem2[index].style.display = "block";					
+				}
+			}
+		}
+	},
+	/*REQ 397: MAPCITY*/
+	changeConfirmationTitlePopup:function(_change){
+		if(mapcityEnabled){
+			var elements = dojo.query("div[id^=\"cajaConfirmationTexto\"]");
+			if(elements){
+				for(var index = 0; index < elements.length; index++){
+					if(_change){
+						if(elements[index].id.indexOf('Texto2') < 0){
+							elements[index].innerHTML = "Validando informaci\u00F3n ingresada ...";
+						}
+					}else{
+						if(elements[index].id.indexOf('Texto2') < 0){
+							elements[index].innerHTML = "Por favor confirma si tu direcci\u00F3n est\u00E1 correcta";
+						}
+					}					
+				}
+			}
+		}		
+	},
+	/*REQ 397: MAPCITY*/
+	hideAlertMessageSpecial: function(){
+		if(mapcityEnabled){
+			var elements = dojo.query("div[id^=\"alertMessageContainer\"]");
+			if(elements){
+				for(var index = 0; index < elements.length; index++){
+					elements[index].style.display = "none";
+				}
+			}
+			var elements = dojo.query("div[id^=\"cajaConfirmationTexto\"]");
+			if(elements){
+				for(var index = 0; index < elements.length; index++){
+					elements[index].style.margin = "40px auto";
+					if(elements[index].id === 'cajaConfirmationTexto'){
+						elements[index].innerHTML = this.confirmationTitlePopup;
+					}
+				}
+			}
+		}
+	},
+	/*REQ 397: MAPCITY*/
+	showAlertMessageSpecial: function(){
+		if(mapcityEnabled){
+			var elements = dojo.query("div[id^=\"alertMessageContainer\"]");
+			if(elements){
+				for(var index = 0; index < elements.length; index++){
+					elements[index].style.display = "block";
+				}
+			}
+			var elements = dojo.query("div[id^=\"cajaConfirmationTexto\"]");
+			if(elements){
+				for(var index = 0; index < elements.length; index++){
+					if(elements[index].id.indexOf("Texto2") > -1){
+						elements[index].style.margin = "0px auto 10px auto";
+					}else{
+						elements[index].style.margin = "20px auto";
+					}
+					
+				}
+			}
+		}		
+	},
+	/*REQ 397: MAPCITY*/
+	findFailure: function (serviceResponse){
+		if (serviceResponse.errorMessage) {
+			MessageHelper.displayErrorMessage(serviceResponse.errorMessage);
+		} else {
+			if (serviceResponse.errorMessageKey) {
+				MessageHelper.displayErrorMessage(serviceResponse.errorMessageKey);
+			}
+		}
+		AddressHelper.setAddressMapAttrs('0', '0', '3');
+	},
+	
+/*REQ 397: MAPCITY*/
+	drawMapCity:function(){
+		this.addressInitMap();
+		if(mapcityEnabled){
+			this.hideAlertModal();			
+			console.debug("mapCity > Start drawMap into showNuevaDireccionModal()");
+			var type = this.getRenderContextType();
+			if(type && type === 'add')
+				this.enableAddressFormElements(false,null,null);
+			var mapContainer = document.getElementById('mapContainer');				
+			while (mapContainer && mapContainer.firstChild) {
+				mapContainer.removeChild(mapContainer.firstChild);
+			}
+			if(map == undefined || map == null){				
+				divMap=document.createElement('DIV');
+				divMap.id='map';
+				/*divMap.style.width='475px';
+				divMap.style.height='460px';
+				divMap.style.position = 'relative';
+				divMap.style.float = 'left';
+				divMap.style.marginTop = '-35px !important';*/
+				mapContainer.appendChild(divMap);
+
+				try{
+					map = new MapCity.Maps.map('map');
+					layer_vector = new OpenLayers.Layer.Vector(
+						"marker",
+						{
+							styleMap: new OpenLayers.StyleMap({
+									externalGraphic: mapCityImageUrl,
+									graphicWidth:  30, 
+									graphicHeight: 30,
+									backgroundXOffset: -15,
+									backgroundYOffset: -30,
+									widthGraphic:73,
+									heightGraphic:80,
+									graphicZIndex: 10,
+									backgroundGraphicZIndex: 9,
+									pointRadius: 5
+								}),
+							rendererOptions: {yOrdering: true}
+						});
+						map.olMap.addLayer(layer_vector);
+						dragFeature = new OpenLayers.Control.DragFeature(layer_vector,{'onComplete': this.onCompleteMove});
+						map.olMap.addControl(dragFeature);
+//						var lon = -70.6000973252287;
+//						var lat = -33.4136766210333;
+						var lon = -70.54581175019983;
+						var lat = -33.389178429442026;
+						this.addMarkerVector(lon, lat);
+						var lonlat = new MapCity.Maps.LonLat(lon, lat);
+						map.setCenter(lonlat);
+				}catch(ex){
+					AddressHelper.setAddressMapAttrs('0', '0', '1');
+					mapcityEnabled = false;
+				}
+			}else{
+						mapContainer.appendChild(map.olMap.div);
+//				var lonlat = new MapCity.Maps.LonLat(-70.6000973252287, -33.4136766210333);
+//				map.setCenter(lonlat);
+//				geo_point.move(lonlat);
+			}
+			if(map && map.olMap && map.olMap.zoomTo){
+				map.olMap.zoomTo(16);
+			}
+		}else{
+			AddressHelper.setAddressMapAttrs('0', '0', flagMapCity);
+		}
+		//setTimeout(AddressHelper.modalOnLoadChecking(type), 5000);
+		console.debug("mapCity > End drawMap into showNuevaDireccionModal()");
+	},
+/*REQ 397: MAPCITY*/
+	onCompleteMove: function(feature) {
+		console.debug("mapCity > Start onCompleteMove", feature);
+			if(mapcityEnabled){
+				feature.geometry.transform(map.olMap.getProjectionObject(), new OpenLayers.Projection("EPSG:4326"));
+				var pointX = feature.geometry.x;
+				var pointY = feature.geometry.y;
+				marker_lon = pointX;
+				marker_lat = pointY;
+				feature.geometry.transform(new OpenLayers.Projection("EPSG:4326"), map.olMap.getProjectionObject());
+				var lonLat = new MapCity.Maps.LonLat(marker_lon, marker_lat);
+				map.setCenter(lonlat);
+			    AddressHelper.setAddressMapAttrs(''+marker_lat,''+marker_lon,'0'); //ALL FINE
+		 	}else{
+				AddressHelper.setAddressMapAttrs('0', '0', flagMapCity);
+			}
+		console.debug("mapCity > END onCompleteMove");
+	},
+/*REQ 397: MAPCITY*/
+	addMarkerVector: function(lon, lat) {
+		console.debug("mapCity > Start addMarkerVector("+lon+", "+lat+")");
+		if(mapcityEnabled){
+			dragFeature.activate();
+			  features = [];
+				var lonLat = new MapCity.Maps.LonLat(lon, lat);
+				geo_point=new OpenLayers.Feature.Vector(new OpenLayers.Geometry.Point(lonLat.lon, lonLat.lat));
+				features.push(geo_point);
+				layer_vector.addFeatures(features);
+		}else{
+			AddressHelper.setAddressMapAttrs('0', '0', flagMapCity);
+		}
+		console.debug("mapCity > End addMarkerVector("+lon+", "+lat+")");
+	},
+	/*REQ 397: MAPCITY*/
+	showConfirmationModal: function(_postFix){	
+		this.hideConfirmationModal();
+		var modal = dojo.byId("ConfirmationWidgetHidden"+_postFix);
+		modal.style.display = 'block';
+		modal = dojo.byId("ConfirmationBackground"+_postFix);
+		modal.style.display = 'block';
+		modal = dojo.byId("cajaConfirmacion"+_postFix);
+		modal.style.display = 'block';
+		this.populateConfirmModal(_postFix);
+		this.prepareConfirmModal(_postFix);
+		this.hideAlertMessageSpecial();
+		this.changeConfirmationTitlePopup(true);
+	},
+	/*REQ 397: MAPCITY*/
+	hideConfirmationModal: function(){
+		var elements = dojo.query("div[id^=\"ConfirmationWidgetHidden\"]");
+		this.hideElementsModal(elements);
+		elements = dojo.query("div[id^=\"cajaConfirmacion\"]");
+		this.hideElementsModal(elements, true);
+		elements = dojo.query("div[id^=\"ConfirmationBackground\"]");
+		this.hideElementsModal(elements);
+	},
+	/*REQ 397: MAPCITY*/
+	hideElementsModal: function(elements, _isChangeStyle){
+		if(elements){
+			for(var index = 0; index < elements.length; index++){
+				if(elements[index]){					
+					if(_isChangeStyle){
+						var newX = 0, newY = 0;
+						dojo.style(elements[index], {
+							left: newX + "px",
+							top: newY + "px"
+						});
+					}
+					elements[index].style.display ="none";
+				}
+			}
+		}
+	},
+	/*REQ 397: MAPCITY*/
+	showAlertModal: function(_postFix){	
+		if(!(_postFix) || trim(_postFix) === '')
+			_postFix = '';
+		this.hideAlertModal();			
+		var modal = dojo.byId("AlertWidgetHidden"+_postFix);
+		if(modal)modal.style.display = 'block';
+		modal = dojo.byId("AlertBackground"+_postFix);
+		if(modal)modal.style.display = 'block';
+		modal = dojo.byId("caja-no-encontrado"+_postFix);
+		if(modal)modal.style.display = 'block';
+		modal = dojo.byId("caja-no-encontrado-texto"+_postFix);
+		if(modal)modal.style.display = 'block';
+		this.prepareAlertModal(_postFix);
+	},	
+	/*REQ 397: MAPCITY*/
+	hideAlertModal: function(){
+			var elements = dojo.query("div[id^=\"AlertWidgetHidden\"]");
+			this.hideElementsModal(elements);
+			elements = dojo.query("div[id^=\"caja-no-encontrado\"]");
+			this.hideElementsModal(elements, true);
+			elements = dojo.query("div[id^=\"AlertBackground\"]");
+			this.hideElementsModal(elements);
+	},
+	/*REQ 397: MAPCITY*/
+	prepareConfirmModal: function (_postFix){
+		var background = dojo.byId("ConfirmationBackground"+_postFix);
+		var modal = dojo.byId("cajaConfirmacion"+_postFix);
+		this.prepareModalGeneral(background, modal);
+	},
+	/*REQ 397: MAPCITY*/
+	prepareAlertModal: function (_postFix){
+		var background = dojo.byId("AlertBackground"+_postFix);
+		var modal = dojo.byId("caja-no-encontrado"+_postFix);
+		this.prepareModalGeneral(background, modal);
+	},
+	prepareModalGeneral: function(background, modal){
+		if(background && modal){
+			var lastX = 0, lastY = 0;
+			var backgInfo = dojo.position(background, true),
+				modalInfo = dojo.position(modal, true);
+				//refY = dojo.position(elementY, true);					
+			lastX += backgInfo.x - modalInfo.x + (backgInfo.w - modalInfo.w) / 2;
+			lastY += backgInfo.y - modalInfo.y + (backgInfo.h - modalInfo.h) / 2;			
+			dojo.style(modal, {
+				left: lastX + "px",
+				top: lastY + "px"
+			});
+		}		
+	},
+	/*REQ 397: MAPCITY*/
+	populateConfirmModal: function(_postFix){
+		var region = this.getValueSelectedRegion(),
+			comuna = this.getValueSelectedComuna(),
+			calle =  this.findElementsForMapCity('address1').value,
+			numero = this.findElementsForMapCity('address2').value;						
+		var direccion = "<b>Regi\u00F3n: </b>"+region+"<br/><b>Comuna: </b>"+comuna+"<br/><b>Calle: </b>"+calle+"<br/><b>N\u00FAmero: </b>"+numero;
+		if(_postFix){
+			var elem = dojo.byId("cajaConfirmationTexto2"+_postFix);
+			if(elem) elem.innerHTML = direccion;
+		}else{
+			var elems = dojo.query("div[id^=\"cajaConfirmationTexto2\"]");
+			if(elems){
+				for (var index = 0; index < elems.length; index++){
+					elems[index].innerHTML = direccion;
+				}
+			}
+		}
+		
+	},
+	/*REQ 397: MAPCITY Tuning */
+	modalOnLoadChecking: function(_contextType){
+		if(mapcityEnabled){
+			_contextType = this.getRenderContextType();
+			console.debug("mapCity > Start modalOnLoadChecking(_contextType = '"+_contextType+"')");
+			this.fixStyleForm();
+			if(_contextType && _contextType === 'edit'){
+				var comuna = this.getValueSelectedComuna();
+				var calle =  this.findElementsForMapCity('address1').value;
+				var numero = this.findElementsForMapCity('address2').value;	
+				this.searchAddress(true, null, comuna, calle, numero, null, true);
+			}
+			console.debug("mapCity > END modalOnLoadChecking");
+		}
+	},
+	/*REQ 397: MAPCITY*/
+	addClass: function (element, classToAdd) {
+	    var currentClassValue = element.className;
+	      
+	    if (currentClassValue.indexOf(classToAdd) == -1) {
+	        if ((currentClassValue == null) || (currentClassValue === "")) {
+	            element.className = classToAdd;
+	        } else {
+	            element.className += " " + classToAdd;
+	        }
+	    }
+	},
+	/*REQ 397: MAPCITY*/ 
+	removeClass: function (element, classToRemove) {
+	    var currentClassValue = element.className;
+	 
+	    if (currentClassValue == classToRemove) {
+	        element.className = "";
+	        return;
+	    }
+	 
+	    var classValues = currentClassValue.split(" ");
+	    var filteredList = [];
+	 
+	    for (var i = 0 ; i < classValues.length; i++) {
+	        if (classToRemove != classValues[i]) {
+	            filteredList.push(classValues[i]);
+	        }
+	    }
+	 
+	    element.className = filteredList.join(" ");
+	},
+	/*REQ 397: MAPCITY*/
+	addressInitMap: function(){
+		var elem = null;
+		if(mapcityEnabled){		
+			elem = dojo.byId("buttonRefreshMap");
+			if(elem)elem.style.display = 'block';
+			elem = dojo.byId("buttonRefreshMap2");
+			if(elem)elem.style.display = 'block';
+			elem = dojo.byId("AABF_rightContainer");
+			if(elem)elem.style.display = 'block';
+			elem = dojo.byId("mapContainerParent");
+			if(elem)elem.style.display = 'block';
+			var elements = ["buttonAceptarMap","buttonAceptarMap_MC"];//margin-top: -34px;
+			for ( var index = 0; index < elements.length; index++) {
+				elem = dojo.byId(elements[index]);
+				if(elem){
+					this.removeClass(elem, "buttonMap_MC");
+					this.removeClass(elem, "buttonMap");
+					this.addClass(elem,(index===1?"buttonMap_MC":"buttonMap"));
+				}
+			}
+			elements = ["buttonAceptarMap2","buttonAceptarMap2_MC"];//margin-top: -34px;
+			for ( var index = 0; index < elements.length; index++) {
+				elem = dojo.byId(elements[index]);
+				if(elem){
+					this.removeClass(elem, "buttonMap2_MC");
+					this.removeClass(elem, "buttonMap2");
+					this.addClass(elem,(index===1?"buttonMap2_MC":"buttonMap2"));					
+				}
+			}			
+			elem = dojo.byId("notaPieMap");
+			if(elem)elem.innerHTML = "* S&iacute; tu direcci&oacute;n es correcta pero no aparece en el mapa, quedar&aacute; registrada de todas formas.";
+			this.fixStyleForm();
+		}else{
+			elem = dojo.byId("linkCloseModal");
+			if(elem)elem.style.display = 'block';
+			elem = dojo.byId("notaPieMap");
+			if(elem)elem.innerHTML = "";
+		}
+	},
+	/*REQ 397: MAPCITY*/
+	fixStyleForm: function (){
+		if(mapcityEnabled){	
+			var elem = document.forms["AddressForm"];
+			var parentElemId = "NuevaDireccionContainer";
+			if(elem){
+//				var elements = dojo.query("input[class=\"txtInput\"]");
+//				for (var index = 0; elements && index < elements.length; index++){
+//					elements[index].style.width = "214px";
+//				}
+//				elements = dojo.query("input[class=\"short_field\"]");
+//				for (var index = 0; elements && index < elements.length; index++){
+//					elements[index].style.width = "96px";
+//				}
+//				elements = dojo.query("textarea[class=\"txtLongInput\"]");
+//				for (var index = 0; elements && index < elements.length; index++){
+//					elements[index].style.width = "445px";
+//				}
+//				elements = dojo.query("a[class=\"refrescar\"]");
+//				for (var index = 0; elements && index < elements.length; index++){
+//					elem = dojo.byId("urlImageMapRefresh");
+//					if(elem){
+//						elem = elem.value;
+//						elements[index].style.background = "#09C URL('"+elem+"') right no-repeat";
+//					}
+//				}
+	//START: CenReqNum#819
+				var elements = dojo.query("div[class=\"styled_select\"]", parentElemId);
+				for (var index = 0; elements && index < elements.length; index++){
+					if(elements[index].id && elements[index].id.indexOf("2") < 0)
+						this.addClass(elements[index],"mapcity");	         
+				}
+				elements = dojo.query("input[class=\"txtInput\"]", parentElemId);
+				for (var index = 0; elements && index < elements.length; index++){
+					if(elements[index])
+						this.addClass(elements[index],"mapcity");	         
+				}
+				elements = dojo.query("input[class=\"short_field\"]", parentElemId);
+				for (var index = 0; elements && index < elements.length; index++){
+					if(elements[index])
+						this.addClass(elements[index],"mapcity");	         
+				}
+				elements = dojo.query("textarea[class=\"txtLongInput\"]", parentElemId);
+				for (var index = 0; elements && index < elements.length; index++){
+					if(elements[index])
+						this.addClass(elements[index],"mapcity");	         
+				}
+				elements = dojo.byId(parentElemId);
+				if(elements)
+					elements.style.height = "480px";  
+				elements = dojo.byId("map");
+				if(elements)
+					elements.style.height = "480px"; 
+				elements = dojo.query("div[class=\"right required-label\"]", parentElemId);
+				for (var index = 0; elements && index < elements.length; index++){
+					if(elements[index])
+						this.addClass(elements[index],"mapcity");	         
+				}
+				elements = dojo.query("div[class=\"olMap\"]", "map");
+				for (var index = 0; elements && index < elements.length; index++){
+					if(elements[index])
+						this.addClass(elements[index],"mapcity");	         
+				}
+				elements = dojo.query("div[class=\"my_account\"]");
+				if(elements && elements[0]){
+					elements = dojo.query("div[class=\"notaPieAddessBook\"]", parentElemId);
+					if(elements && elements[0])
+						elements[0].style.paddingBottom = "3px";
+				}
+//				elements =  dojo.query(".content_footer", "NuevaDireccionContainer");
+//				for (var index = 0; elements && index < elements.length; index++){
+//					if(elements[index].id){
+//						elements[index].style.padding = "35px 0 0 15px";
+//					}
+//				}
+			}
+		}else{
+			elements = dojo.query("div[class=\"styled_select mapcity\"]");
+			for (var index = 0; elements && index < elements.length; index++){
+				this.removeClass(elem, "mapcity");
+				//this.addClass(elements[index],"mapcity");	         
+			}
+		}
+	//END: CenReqNum#819
+	},
+	/*REQ 397 MAPCITY*/
+	setMapStylePopup: function(elementId){
+		var elem = dojo.byId(elementId);
+		if(elem){
+			elem.style.width = "455px";
+			elem.style.height = "460px";
+			elem.style.position = "relative";
+			elem.style.float = "left";
+		}		
+	},
+	/*REQ 481: NOVIOS SERVICE*/
+	enableNextButton: function (_enable){
+		var elem1 = dojo.byId("shippingBillingPageNext");
+		var elem2 = dojo.byId("shippingBillingPageNext2");
+		if(elem1 && elem2){
+			if(_enable){
+				elem1.style.display = "block";
+				elem2.style.display = "none";
+			}else{
+				elem1.style.display = "none";
+				elem2.style.display = "block";
+			}
+		}
+	},
+	/*REQ_481_NOVIOS_SERVICE*/
+	verifyElementHiddenReq481:function(){
+		/*REQ_481_NOVIOS_SERVICE*/
+		if(document.getElementById("hasErrorNoviosService")){
+			this.showAlertModal('ENS');
+			this.enableNextButton(false);
+		}else{
+			this.enableNextButton(true);
+		}
+	},
+	/*REQ.444 Guest_User_New_Flow*/
+	showOptionAddressEntry:function(_typeEntry){
+		var content = dojo.byId("shippingAddressFormZone");
+		if(_typeEntry && _typeEntry === 'novios'){
+			if(content){
+				content.style.display = 'none';
+				content.style.visibility = 'hidden';
+			}
+		}else if(_typeEntry && _typeEntry === 'normal'){					
+			if(content){
+				content.style.visibility = 'visible';
+				content.style.display = 'block';
+			}
+			this.drawMapCity('shortMap');	
+			
+		}
+	},
+	/**
+	 *	This function creates an input element to represent the state.
+	 *  @param {string} paramPrefix The value can be shipping, billing or blank.
+	 *  @param {string} currentState The value in the state field.
+	 *  @param {string} id The id of the state field.
+	 */
+	createState:function(paramPrefix,currentState,id){
+		var stateInput = document.createElement("input");
+		stateInput.setAttribute("id",paramPrefix + id);
+		if(id=="_state1"){
+		stateInput.setAttribute("name", paramPrefix + "_state");}
+		else{
+		stateInput.setAttribute("name", paramPrefix + "state");}
+		stateInput.setAttribute("class", this.stateClass);
+		stateInput.setAttribute("className",this.stateClass);
+		stateInput.setAttribute("size", "35");
+		stateInput.setAttribute("maxlength", "49");
+		if (currentState != null && currentState != 'undefined')
+		{
+			stateInput.setAttribute("value", currentState);
+		}
+		return stateInput;
+	},
+	
+	/**
+	 * This function creates a <select> element to represent the state field and loads it with the 
+	 * states corresponding to the country field.
+     * @param {string} paramPrefix The value can be shipping, billing or blank.
+	 * @param {string} currentCountryCode The country code of the selected country.
+	 * @param {string} currentState The value in the state field.
+	 * @param {string} id The id of the state field.
+	 */
+	createStateWithOptions:function(paramPrefix, currentCountryCode, currentState,id){
+		
+		this.getCountryArray();
+		var stateSelect = document.createElement("select");
+		stateSelect.setAttribute("id", paramPrefix + id);
+		if(id=="_state1"){
+		stateSelect.setAttribute("name", paramPrefix + "_state");}
+		else{
+		stateSelect.setAttribute("name", paramPrefix + "state");}
+		stateSelect.setAttribute("class","drop_down_country");
+		stateSelect.setAttribute("className","drop_down_country");
+		/*clear old options. */ 
+		stateSelect.options.length = 0;
+		
+		/* add all states. */
+		for (state_code in countries[currentCountryCode].states) {
+			
+			aOption = document.createElement("option");
+			stateSelect.options[stateSelect.length] = aOption;
+			aOption.text = countries[currentCountryCode].states[state_code];
+			aOption.value = state_code;
+
+			if (state_code == currentState || countries[currentCountryCode].states[state_code] == currentState) {
+				aOption.selected = true;
+			}
+		}
+		
+		return stateSelect;
+	},
+	
+	
+	
+	
+	/**
+	 * This function validates the address form independently from the order of the fields displayed on the form, i.e. independent from the locale.
+	 * A hidden field named "fields" must be set in the jsp/jspf file that calls this method. The purpose of this hidden field is 
+	 * to set all the mandatory input fields and the order of these fields displayed on each locale-specific address entry page, so that
+	 * this method knows which input fields to validate and in which order it should validate them.
+	 *
+	 * assumptions:1. Mandatory fields use UPPER CASE, non-mandatory fields use lower case.
+	 *	     	   2. The error messages used in this method are declared in the jsp/jspf files that call this method. 
+	 * @param {string} form The name of the address form obtained from the page containing address input fields.
+	 * @param {string} prefix The value is set to shipping or billing.
+	 * 
+	 * @return {boolean} return true if no error was found, or the hidden field "fields" were not set in the jsp/jspf file that calls this method,
+	 * return false if form could not be found, or if there was an error validating a particular field.
+	 */
+	validateAccentedCharacters:function (name,regExpr){
+		splitName = name;
+		i=0;
+		isValid = true;
+		
+		while (i < splitName.length){
+			if(splitName[i]=='=' || splitName[i]==';'){
+				return false;
+			}
+		if(!regExpr.test(splitName[i])){
+			temp = splitName[i];
+			if(!(temp.charCodeAt(0)==161 ||temp.charCodeAt(0)==191 || temp.charCodeAt(0)==209 ||temp.charCodeAt(0)==241 || temp.charCodeAt(0)==193 ||temp.charCodeAt(0)==201 || temp.charCodeAt(0)==205 || temp.charCodeAt(0)==211 || temp.charCodeAt(0)==218 ||temp.charCodeAt(0)==225 || temp.charCodeAt(0)==233 || temp.charCodeAt(0)==237 || temp.charCodeAt(0)==243 || temp.charCodeAt(0)==250)){
+			 isValid = false;
+			 return isValid;
+			}
+		}
+		i++;
+		}
+		return isValid;
+	},
+	validateAddressForm: function(form,prefix){
+		reWhiteSpace = new RegExp(/^\s+$/);
+		specialCharactersRegex1 = new RegExp(/^[A-Za-z0-9_\s.,-\/]/);
+		specialCharactersRegex2 = new RegExp(/^[A-Za-z0-9_ï¿½ï¿½!?,.()@$"#?\s&\/%-]/);
+	    isValid = true;
+		if(prefix == null){prefix = ""};
+		if(prefix){this.setStateDivName(prefix + "stateDiv")};
+		if(form != null){
+			/*REQ 397: MAPCITY*/
+			try{
+			/*END REQ 397: MAPCITY*/
+				var fields="";
+				if(form["AddressForm_FieldsOrderByLocale"] != null && form["AddressForm_FieldsOrderByLocale"].value != null && form["AddressForm_FieldsOrderByLocale"].value != ""){
+					fields = form["AddressForm_FieldsOrderByLocale"].value.split(",");
+				}
+				else if(document.getElementById("AddressForm_FieldsOrderByLocale") != null && document.getElementById("AddressForm_FieldsOrderByLocale").value!= ""){
+					fields=document.getElementById("AddressForm_FieldsOrderByLocale").value.split(",");
+				}
+				var lastName = prefix + "lastName";
+				var firstName = prefix + "firstName";
+				var middleName = prefix + "middleName";
+				var address1 = prefix + "address1";
+				var address2 = prefix + "address2";
+				var depto = prefix + "addressField2";
+				var city = prefix + "city";
+				var state = prefix + "state";
+				var country = prefix + "country";
+				var zipCode = prefix + "zipCode";
+				var email1 = prefix + "email1";
+				var phone1 = prefix + "phone1";
+				var phone2 = prefix + "phone2";
+				var rut = prefix + 'billingCode';
+				var commentario = prefix + 'address3';
+				//REQ 397: MAPCITY
+				var addressFlag = prefix + 'addressFlag';
+				var addressLatitude = prefix + 'addressLat';
+				var addressLongitude = prefix + 'addressLon';
+				
+				//Brazil's form fields to validate
+				var pay_CPFNumber,taxPayerId,companyName,organizationName;
+				if ( typeof(isBrazilStore) != 'undefined' && isBrazilStore) {
+					pay_CPFNumber = "pay_CPFNumber";
+					taxPayerId = prefix + "taxPayerId"
+					companyName = prefix + "companyName";
+					organizationName = prefix + "organizationName"; //company's short name
+				}
+				//aperez fix for form user guest and registered
+				var userTypeCheckOut = document.getElementById("userTypeCheckOut").value;
+				//alert(userTypeCheckOut);
+				for(var i=0; i<fields.length; i++) {
+					var field = fields[i];
+					
+					if(field == "LAST_NAME" || field == "last_name"){
+						form[lastName].value = trim(form[lastName].value);
+						if(field == "LAST_NAME" && (form[lastName].value == "" || reWhiteSpace.test(form[lastName].value))){ 
+							MessageHelper.formErrorHandleClient(form[lastName].id, MessageHelper.messages["ERROR_LastNameEmpty"]);
+							return false;
+						}
+						isValid = this.validateAccentedCharacters(form[lastName].value,specialCharactersRegex1);
+					    if(form[lastName] != null && !isValid){ 
+							MessageHelper.formErrorHandleClient(form[lastName].id,MessageHelper.messages["ERROR_INVALID_LAST_NAME"]); 
+							return false;
+							}
+						if(!MessageHelper.isValidUTF8length(form[lastName].value, 128)){ 
+							MessageHelper.formErrorHandleClient(form[lastName].id, MessageHelper.messages["ERROR_LastNameTooLong"]);
+							return false;
+						}
+					}else if(field == "FIRST_NAME" || field == "first_name"){
+						form[firstName].value = trim(form[firstName].value);
+						if(field == "FIRST_NAME" && (form[firstName].value == "" || reWhiteSpace.test(form[firstName].value))){ 
+							MessageHelper.formErrorHandleClient(form[firstName].id, MessageHelper.messages["ERROR_FirstNameEmpty"]);
+							return false;
+						}
+						isValid = this.validateAccentedCharacters(form[firstName].value,specialCharactersRegex1);
+					    if(form[firstName] != null && !isValid){
+							MessageHelper.formErrorHandleClient(form[firstName].id,MessageHelper.messages["ERROR_INVALID_FIRST_NAME"]); 
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(form[firstName].value, 128)){ 
+							MessageHelper.formErrorHandleClient(form[firstName].id, MessageHelper.messages["ERROR_FirstNameTooLong"]); 
+							return false;
+						}
+					}else if(field == "MIDDLE_NAME" || field == "middle_name"){
+						form[middleName].value = trim(form[middleName].value);
+						if(field == "MIDDLE_NAME" && (form[middleName].value == "" || reWhiteSpace.test(form[middleName].value))){ 
+							MessageHelper.formErrorHandleClient(form[middleName].id, MessageHelper.messages["ERROR_MiddleNameEmpty"]);
+							return false;
+						}
+						isValid = this.validateAccentedCharacters(form[middleName].value,specialCharactersRegex1);
+					    if(form[middleName] != null && !isValid){ 
+							MessageHelper.formErrorHandleClient(form[middleName].id,MessageHelper.messages["ERROR_INVALID_MIDDLE_NAME"]); 
+							return false;
+							}
+						if(!MessageHelper.isValidUTF8length(form[middleName].value, 128)){ 
+							MessageHelper.formErrorHandleClient(form[middleName].id, MessageHelper.messages["ERROR_MiddleNameTooLong"]); 
+							return false;
+						}
+					}
+					//aperez: modificacion para agregar el logonId en zipcode
+					else if(field == "ZIP" || field == "zipCode"){
+						if(userTypeCheckOut == "'G'" || userTypeCheckOut == 'G'){
+							form[zipCode].value = trim(form[zipCode].value);
+	//						if(field == "ZIP" && (form[zipCode].value == "" || reWhiteSpace.test(form[zipCode].value))){ 
+	//							MessageHelper.formErrorHandleClient(form[zipCode].id, MessageHelper.messages["ERROR_MiddleNameEmpty"]);
+	//							return false;
+	//						}
+							if(form[zipCode] != null && reWhiteSpace.test(form[zipCode].value) || form[zipCode].value == ""){ 
+								MessageHelper.formErrorHandleClient(form[zipCode].id,MessageHelper.messages["ERROR_LogonIdEmpty"]); 
+								return false;
+							} 
+						    if(!validateRut(form[zipCode].value)){ 
+								MessageHelper.formErrorHandleClient(form[zipCode].id,MessageHelper.messages["ERROR_INVALID_RUT"]); 
+								return false;
+							}
+						    form[zipCode].value = formatRut(form[zipCode].value);
+	//						if(!MessageHelper.isValidUTF8length(form[middleName].value, 128)){ 
+	//							MessageHelper.formErrorHandleClient(form[middleName].id, MessageHelper.messages["ERROR_MiddleNameTooLong"]); 
+	//							return false;
+	//						}
+						}
+						
+					}
+					//---------
+					else if(field == "ADDRESS" || field == "address"){
+						form[address1].value = trim(form[address1].value);
+						if(field == "ADDRESS" && (form[address1].value == "" || reWhiteSpace.test(form[address1].value))){ 
+							MessageHelper.formErrorHandleClient(form[address1].id, MessageHelper.messages["ERROR_AddressEmpty"]);
+							return false;
+						}
+						isValid = this.validateAccentedCharacters(form["address1"].value,specialCharactersRegex1);
+					    if(form["address3"] != null && !isValid){ 
+							MessageHelper.formErrorHandleClient(form["address1"].id,MessageHelper.messages["ERROR_INVALID_CALLE"]); 
+							return false;
+							}
+					    /* REQ 397: MAPCITY old=100 now=20 */
+						if(!MessageHelper.isValidUTF8length(form[address1].value,100)){ 
+							MessageHelper.formErrorHandleClient(form[address1].id, MessageHelper.messages["ERROR_AddressTooLong"]); 
+							return false;
+						}
+						
+					}else if(field == "HOUSENUM" || field == "housenum"){
+						form[address2].value = trim(form[address2].value);
+						if(field == "HOUSENUM" && (form[address2].value == "" || reWhiteSpace.test(form[address2].value))){ 
+							MessageHelper.formErrorHandleClient(form[address2].id, MessageHelper.messages["ERROR_HouseNumEmpty"]);
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(form[address2].value, 7)){ 
+							MessageHelper.formErrorHandleClient(form[address2].id, MessageHelper.messages["ERROR_HouseNumTooLong"]); 
+							return false;
+						}
+						
+					}else if(field == "APTNUM" || field == "aptnum"){
+						form[depto].value = trim(form[depto].value);
+						if(field == "APTNUM" && (form[depto].value == "" || reWhiteSpace.test(form[depto].value))){ 
+							MessageHelper.formErrorHandleClient(form[depto].id, MessageHelper.messages["ERROR_ApartmentNumEmpty"]);
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(form[depto].value, 23)){ 
+							MessageHelper.formErrorHandleClient(form[depto].id, MessageHelper.messages["ERROR_ApartmentNumTooLong"]); 
+							return false;
+						}
+					}else if(field == "CITY" || field == "city"){
+						form[city].value = trim(form[city].value);
+						
+						// Changes below line for select default alert on 6 dec 13
+						if(field == "CITY" && (form[city].value == "" || reWhiteSpace.test(form[city].value) || form[city].value =="Selecciona una comuna" ))
+						{ 
+							MessageHelper.formErrorHandleClient(form[city].id, MessageHelper.messages["ERROR_ComunaEmpty"]);
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(form[city].value, 128)){
+							MessageHelper.formErrorHandleClient(form[city].id, MessageHelper.messages["ERROR_ComunaTooLong"]);
+							return false;
+						}
+					}else if(field == "STATE/PROVINCE" || field == "state/province"){
+						var state = form[state];
+						if(state == null || state == ""){
+							state = document.getElementById(this.stateDivName).firstChild;
+						}
+						state.value = trim(state.value);
+						if(field == "STATE/PROVINCE" && (state.value == null || state.value == "" || reWhiteSpace.test(state.value))){
+							MessageHelper.formErrorHandleClient(state.id, MessageHelper.messages["ERROR_StateEmpty"]);
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(state.value, 128)){
+							MessageHelper.formErrorHandleClient(state.id, MessageHelper.messages["ERROR_StateTooLong"]);
+							return false;
+						}
+					}else if(field == "COUNTRY/REGION" || field == "country/region"){
+						form[country].value = trim(form[country].value);
+						if(field == "COUNTRY/REGION" && (form[country].value == "" || reWhiteSpace.test(form[country].value))){ 
+							MessageHelper.formErrorHandleClient(form[country].id, MessageHelper.messages["ERROR_CountryEmpty"]);
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(form[country].value, 128)){ 
+							MessageHelper.formErrorHandleClient(form[country].id, MessageHelper.messages["ERROR_CountryTooLong"]);
+							return false;
+						}
+					}else if(field == "comments" || field == "COMMENTS"){
+						isValid = this.validateAccentedCharacters(form["address3"].value,specialCharactersRegex2);
+					    if(form["address3"] != null && !isValid){ 
+							MessageHelper.formErrorHandleClient(form["address3"].id,MessageHelper.messages["ERROR_FACILITAR_TU_DESPACHO"]); 
+							return false;
+							}
+					}else if((typeof(isBrazilStore) != 'undefined' && isBrazilStore) && (field == "CPF_NUMBER" || field == "cpf_number")){
+						if (form["consumerRegistration"] != null && form["consumerRegistration"].checked){//consumer registration, check CPF#
+							form[pay_CPFNumber].value = trim(form[pay_CPFNumber].value);
+							if(field == "CPF_NUMBER" && (form[pay_CPFNumber].value == "" || reWhiteSpace.test(form[pay_CPFNumber].value))){ 
+								MessageHelper.formErrorHandleClient(form[pay_CPFNumber].id, MessageHelper.messages["ERROR_CPFNumberEmpty"]);
+								return false;
+							}
+							if((MessageHelper.utf8StringByteLength(form[pay_CPFNumber].value) != 11) ||
+								!MyBrazilAccountDisplay.isValidCpf(form[pay_CPFNumber].value)){ 
+								MessageHelper.formErrorHandleClient(form[pay_CPFNumber].id, MessageHelper.messages["ERROR_CPFNumberInvalid"]); 
+								return false;
+							}
+						}else{//Business registration, check CNPJ#, companyname and CompanyShort name
+	                        //note:CPF field is shared with CNPJ#, only label is different on UI, same input field						
+							form[pay_CPFNumber].value = trim(form[pay_CPFNumber].value);
+							//validate CNPJ /CGC #
+							if(field == "CPF_NUMBER" && (form[pay_CPFNumber].value == "" || reWhiteSpace.test(form[pay_CPFNumber].value))){ 
+								MessageHelper.formErrorHandleClient(form[pay_CPFNumber].id, MessageHelper.messages["ERROR_CNPJNumberEmpty"]);
+								return false;
+							}
+							if(MessageHelper.utf8StringByteLength(form[pay_CPFNumber].value) > 14){ //longer number, 14
+								MessageHelper.formErrorHandleClient(form[pay_CPFNumber].id, MessageHelper.messages["ERROR_CNPJNumberToLong"]); 
+								return false;
+							}
+							if((MessageHelper.utf8StringByteLength(form[pay_CPFNumber].value) != 14) ||
+							   !MyBrazilAccountDisplay.isValidCnpj(form[pay_CPFNumber].value)){ 
+								MessageHelper.formErrorHandleClient(form[pay_CPFNumber].id, MessageHelper.messages["ERROR_CNPJNumberInvalid"]); 
+								return false;
+							}
+							//validate company name, can't be blank
+							form[companyName].value = trim(form[companyName].value);
+							if(form[companyName].value == "" || reWhiteSpace.test(form[companyName].value)){ 
+								MessageHelper.formErrorHandleClient(form[companyName].id, MessageHelper.messages["ERROR_CompanyNameEmpty"]);
+								return false;
+							}
+							if(!MessageHelper.isValidUTF8length(form[companyName].value, 80)){
+								MessageHelper.formErrorHandleClient(form[companyName].id, MessageHelper.messages["ERROR_CompanyNameTooLong"]); 
+								return false;
+							}
+							//validate company's short name, can't be blank
+							form[organizationName].value = trim(form[organizationName].value);
+							if(form[organizationName].value == "" || reWhiteSpace.test(form[organizationName].value)){ 
+								MessageHelper.formErrorHandleClient(form[organizationName].id, MessageHelper.messages["ERROR_CompanyShortNameEmpty"]);
+								return false;
+							}
+						}					
+					}else if(field == "EMAIL1" || field == "email1"){
+						form[email1].value = trim(form[email1].value);
+						emailValidationRegEx = new RegExp(/^([\w-]+(?:\.[\w-]+)*)@((?:[\w-]+\.)*\w[\w-]{0,66})\.([A-Za-z]{2,6}(?:\.[A-Za-z]{2})?)$/);
+						if(field == "EMAIL1" && (form[email1].value == "" || reWhiteSpace.test(form[email1].value))){
+							MessageHelper.formErrorHandleClient(form[email1].id, MessageHelper.messages["ERROR_EmailEmpty"]);
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(form[email1].value, 256)){ 
+							MessageHelper.formErrorHandleClient(form[email1].id, MessageHelper.messages["ERROR_EmailTooLong"]);
+							return false;
+						}
+						if(!emailValidationRegEx.test(form[email1].value)){
+							
+							MessageHelper.formErrorHandleClient(form[email1].id, MessageHelper.messages["ERROR_INVALIDEMAILFORMAT"]);
+							return false;
+						}
+					}
+					else if(field == "PHONE1" || field == "phone1"){
+						form[phone1].value = trim(form[phone1].value);
+						if(field == "PHONE1" && (form[phone1].value == "" || reWhiteSpace.test(form[phone1].value))){
+							MessageHelper.formErrorHandleClient(form[phone1].id, MessageHelper.messages["ERROR_PhonenumberEmpty"]);
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(form[phone1].value, 32)){ 
+							MessageHelper.formErrorHandleClient(form[phone1].id, MessageHelper.messages["ERROR_PhoneTooLong"]);
+							return false;
+						}
+						if(!MessageHelper.IsValidPhone(form[phone1].value)){
+							MessageHelper.formErrorHandleClient(form[phone1].id, MessageHelper.messages["ERROR_INVALIDPHONE"]);
+							return false;
+						}
+					} 
+					else if(field == "PHONE2" || field == "phone2"){
+						form[phone2].value = trim(form[phone2].value);
+						if(field == "PHONE2" && (form[phone2].value == "" || reWhiteSpace.test(form[phone2].value))){
+							MessageHelper.formErrorHandleClient(form[phone2].id, MessageHelper.messages["ERROR_PhonenumberEmpty"]);
+							return false;
+						}
+						if(!MessageHelper.isValidUTF8length(form[phone2].value, 32)){ 
+							MessageHelper.formErrorHandleClient(form[phone2].id, MessageHelper.messages["ERROR_PhoneTooLong"]);
+							return false;
+						}
+						if(!MessageHelper.IsValidPhone(form[phone2].value)){
+							MessageHelper.formErrorHandleClient(form[phone2].id, MessageHelper.messages["ERROR_INVALIDPHONE"]);
+							return false;
+						}
+					}
+					//REQ 397: MAPCITY
+					else if (field == "ADDRESSFLAG" || field == "addressflag"){
+						form[addressFlag].value = trim(form[addressFlag].value);
+						form[addressLatitude].value = trim(form[addressLatitude].value);
+						form[addressLongitude].value = trim(form[addressLongitude].value);
+					}
+					else {
+						/*console.debug("error: mandatory field name " + mandatoryField + " is not recognized.");
+						return false;*/
+					}
+				}
+				if (form[address1].value == "" && form[address2].value != "") {
+			
+				form[address1].value = form[address2].value;
+				form[address2].value = "";
+				}
+				if(typeof(isBrazilStore) != 'undefined' && isBrazilStore){
+					if (form["consumerRegistration"] != null && form["consumerRegistration"].checked){ 
+					//registered as a consumer, clear out the Business fields
+					form[companyName].value = "";
+					form[organizationName].value = "";
+					form[taxPayerId].value = "";
+					}
+				}
+			
+				return true; 
+			/*REQ 397: MAPCITY*/
+			}finally{
+				
+			}
+			/*END REQ 397: MAPCITY*/
+		}
+		return false; 
+	},
+	
+	/**
+	 * This function saves the address entry form when a registered customer wants to edit/add a new address 
+	 * during checkout from  his/her shopping cart.
+	 * @param {string} The id of the service that was invoked, e.g. AjaxUpdateAddressForPerson, AjaxAddAddressForPerson, etc.
+	 * @param {string} The name of the form containing address information.
+	 */
+	
+	saveShopCartAddress: function(serviceId, formName){
+		var form = document.forms[formName];
+		if(form.addressType != null && form.addressType.value == 'ShippingAndBilling'){
+			serviceId = 'AjaxAddShippingAndBillingAddressForPersonDuringCheckout';
+		}
+		if(this.validateAddressForm(form)){
+			this.saveAddress(serviceId, formName);
+		}
+	},
+	
+	
+	/**
+	 * This function saves the address entry form on an unregistered user's checkout page.
+	 * @param {string} formName1 The name of the billing address form.
+	 * @param {string} formName2 The name of the shipping address form.
+	 * @param {string} stateDivName1 The name of the state field in the billing address form.
+	 * @param {string} stateDivName2 The name of the state field in the shipping address form.
+	 */
+	
+	saveUnregisteredCheckoutAddress: function(formName, stateDivName)
+	{
+		var form = document.forms[formName];
+		
+		this.setStateDivName(stateDivName);
+		/*Validate form input fields */
+		if(this.validateAddressForm(form))
+		{
+			/*var sameaddress = document.getElementById("SameShippingAndBillingAddress");
+			if (!sameaddress.checked)
+			{
+				var form2 = document.forms[formName2];
+				this.setStateDivName(stateDivName2);
+				/*Validate form input fields */
+				/*if(this.validateAddressForm(form2))
+				{
+					this.saveAddress('AddBillingAddress', 'billingAddressCreateEditFormDiv_1');
+				}
+			}
+			else
+			{*/
+				form.addressType.value=this.addressType;
+				this.saveAddress('AddShippingAddress', formName);
+			//}
+		}
+	},
+	/*REQ 397: MAPCITY*/
+	validateCheckoutAddress: function(formName, stateDivName){
+		this.checkoutFormName = formName;
+		var form = document.forms[formName];
+		if(stateDivName)this.setStateDivName(stateDivName);
+		/*Validate form input fields */
+		var valid =  this.validateAddressForm(form);
+		try{
+			return valid;
+		}finally{
+			if(valid){
+				if(mapcityEnabled){
+					AddressHelper.disableConfirmOkButton(true);
+					cursor_wait();
+					setTimeout("AddressHelper.searchAddress(true,null,AddressHelper.findMatchOfSelectedComuna(AddressHelper.getValueSelectedComuna()),AddressHelper.findElementsForMapCity('address1').value,AddressHelper.findElementsForMapCity('address2').value, true)",200);
+				}else{
+					AddressHelper.setAddressMapAttrs('0', '0', flagMapCity);
+				}
+			}
+		}		
+	},
+	
+	/*REQ - 444*/
+	
+	validateBillingAddress : function(formName, stateDivName,noviosAddress,shipAddressAdd){
+		this.checkoutFormName = formName;
+		var form = document.forms[formName];
+		if(stateDivName)this.setStateDivName(stateDivName);
+		/*Validate form input fields */
+		var valid =  this.validateAddressForm(form);
+		if(valid){
+			form.addressType.value=this.addressType;
+			this.saveBillingAddress = true;
+			if(null != form.RegAddressIdTemp && "" != form.RegAddressIdTemp.value &&
+					(undefined == form.RegAddressId || null == form.RegAddressId)){
+				var input = document.createElement("input");				
+				input.setAttribute("type", "hidden");
+				input.setAttribute("name", "addressId");
+				input.setAttribute("id", "RegAddressId");
+				input.setAttribute("value", form.RegAddressIdTemp.value);				
+				document.getElementById("shippingAddressCreateEditFormDiv_1").appendChild(input);
+				form.addressLat.value = "-00.0000000000000";
+				form.addressLon.value = "00.0000000000000";
+			}
+			if(undefined != noviosAddress && noviosAddress != null && noviosAddress){	
+				cursor_wait();
+				//Saving billing address only in shipping address service
+				this.saveAddress('AddShippingAddress', formName);
+			}else{							
+				MyAccountServicesDeclarationJS.saveAddressType = shipAddressAdd;
+				cursor_wait();	
+				this.saveAddress('AddBillingAddress', formName);
+			}
+		}else{
+			return valid;
+		}	
+	},
+	/**
+	 * This function saves an address entry form to the associated service.
+	 * @param {string} serviceId The id of the service that was invoked, e.g. AjaxUpdateAddressForPerson, AjaxAddAddressForPerson, etc. 
+	 * @param {string} formName The name of the form containing address information.
+	 */
+	
+	saveAddress:function(serviceId, formName) {
+		var form = document.forms[formName];
+		if (form.address1.value == "" && form.address2.value != "") {
+			form.address1.value = form.address2.value;
+			form.address2.value = "";
+		}
+	 	var addressService = wc.service.getServiceById(serviceId);
+	 	addressService.formId = formName;
+		/* For Handling multiple clicks */
+		if(!submitRequest()){
+			return;
+		}   	 	
+	 	cursor_wait();
+	 	wc.service.invoke(serviceId);
+	},
+	
+	/**
+	 * This function calls UpdateOrderItem/AjaxUpdateOrderItem service to update order calculation
+	 */
+	
+	updateOrderAfterAddressUpdate:function() {
+		var params = [];
+		params["storeId"] = this.storeId;
+		params["catalogId"] = this.catalogId;
+		params["langId"] = this.langId;
+		params.calculationUsage = "-1,-2,-3,-4,-5,-6,-7";
+		params.orderId = ".";
+			
+	 	cursor_wait();
+	 	wc.service.invoke("AjaxUpdateOrderAfterAddressUpdate", params);
+	},
+
+	/**
+	 *  This function populates the country code to mobile phone based on the selected country.
+	 *  @param {string} countryDropDownId The id of the mobile country drop down list
+	 *  @param {string} countryCallingCodeId The id of the mobile country calling code text box. -- DEPRECATED		
+	 	2012.05.10 : update  countryCallingCodeId is now taking the class name, in case of more than one country code field
+	 	@param {string} countryCallingCodeEls: The class name of the country calling code text box(es).
+	 */
+	
+	loadCountryCode:function(countryDropDownId,countryCallingCodeEls){
+		this.getCountryArray();
+		var countryCode = document.getElementById(countryDropDownId).value;
+		var callingCodeEl = dojo.query("."+countryCallingCodeEls);
+		callingCodeEl.attr('value', countries[countryCode].countryCallingCode);
+	},
+	
+	/**
+	 *  This function checks for an entry in the Mobile Phone Number field. 
+	 *  If a Mobile Phone number has been entered, it enables the SMS Notifications/Promotions checkbox,
+	 *  else it disables the SMS Notifications/Promotions checkbox.
+	 *  @param {string} form The name of the form containing the Mobile Phone Number entry field.
+	 */
+	enableSMSNotifications:function(form){
+	var form = document.forms[form];
+	if(form.mobilePhone1.value != ""){
+		//form.sendMeSMSNotification.disabled = false;
+		form.sendMeSMSPreference.disabled = false;
+	 }
+	 else{
+		 //form.sendMeSMSNotification.disabled = true;
+		 form.sendMeSMSPreference.disabled = true;
+		 //form.sendMeSMSNotification.checked = false;
+		 form.sendMeSMSPreference.checked = false;
+	 }
+  },
+	/**
+	 * Sets the address type when a user wants to add a new address of type shipping and billing during order check out.
+	 * @param {Object} checkbox The HTML checkbox input object.
+	 * @param {Object} form The form that contains the new address information.
+	 */
+	setAddressTypeInCreatingNewAddressDuringCheckout: function(checkbox, form){
+		if(form.addressType != null && form.originalAddressType != null){
+			if(checkbox.checked){
+				form.addressType.value = 'ShippingAndBilling';
+			}else{
+				form.addressType.value = form.originalAddressType.value;
+			}
+		}
+	},
+	
+	isValidFacturaForm:function(facturaForm) {
+		reWhiteSpace = new RegExp(/^\s+$/);
+		specialCharactersRegex1 = new RegExp(/^[A-Za-z0-9_\s.,-\/]/);
+		specialCharactersRegex2 = new RegExp(/^[A-Za-z0-9_ï¿½ï¿½!?,.()@$"#?\s&\/%-]/);
+		specialCharactersRegex3 = new RegExp(/^[A-Za-z0-9_.\-\s]/);
+	    isValid = true;
+		if(facturaForm['empresa'].value == "" || reWhiteSpace.test(facturaForm['empresa'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['empresa'].id, MessageHelper.messages["BILLING_FACTURA_EMPTY_EMPRESA"]);
+			return false;
+		}
+		isValid = this.validateAccentedCharacters(facturaForm['empresa'].value,specialCharactersRegex1);
+	    if(facturaForm['empresa'] != null && !isValid){
+			MessageHelper.formErrorHandleClient(facturaForm['empresa'].id,MessageHelper.messages["ERROR_INVALID_EMPRESA"]); 
+			return;
+		}
+		if(facturaForm['rut'].value == "" || reWhiteSpace.test(facturaForm['rut'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['rut'].id, MessageHelper.messages["BILLING_FACTURA_EMPTY_RUT"]);
+			return false;
+		}
+		if(!validateRut(facturaForm['rut'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['rut'].id, MessageHelper.messages["BILLING_FACTURA_INVALID_RUT"]);
+			return false;
+		}
+		if(facturaForm['razonsocial'].value == "" || reWhiteSpace.test(facturaForm['razonsocial'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['razonsocial'].id, MessageHelper.messages["BILLING_FACTURA_EMPTY_RAZON_SOCIAL"]);
+			return false;
+		}
+		isValid = this.validateAccentedCharacters(facturaForm['razonsocial'].value,specialCharactersRegex1);
+	    if(facturaForm['razonsocial'] != null && !isValid){
+			MessageHelper.formErrorHandleClient(facturaForm['razonsocial'].id,MessageHelper.messages["ERROR_INVALID_RAZON_SOCIAL"]); 
+			return;
+		}
+		if(facturaForm['giro'].value == "" || reWhiteSpace.test(facturaForm['giro'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['giro'].id, MessageHelper.messages["BILLING_FACTURA_EMPTY_GIRO"]);
+			return false;
+		}
+		isValid = this.validateAccentedCharacters(facturaForm['giro'].value,specialCharactersRegex1);
+	    if(facturaForm['giro'] != null && !isValid){
+			MessageHelper.formErrorHandleClient(facturaForm['giro'].id,MessageHelper.messages["ERROR_INVALID_GIRO"]); 
+			return;
+		}
+		if(facturaForm['direccion'].value == "" || reWhiteSpace.test(facturaForm['direccion'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['direccion'].id, MessageHelper.messages["BILLING_FACTURA_EMPTY_DIRECCION"]);
+			return false;
+		}
+		isValid = this.validateAccentedCharacters(facturaForm['direccion'].value,specialCharactersRegex1);
+	    if(facturaForm['direccion'] != null && !isValid){
+			MessageHelper.formErrorHandleClient(facturaForm['direccion'].id,MessageHelper.messages["ERROR_INVALID_DIRECCION"]); 
+			return;
+		}
+		if(facturaForm['address2'].value == "" || reWhiteSpace.test(facturaForm['address2'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['address2'].id, MessageHelper.messages["BILLING_FACTURA_EMPTY_NUMERO"]);
+			return false;
+		}
+		if(!MessageHelper.IsNumeric(facturaForm['address2'].value,false)){
+			MessageHelper.formErrorHandleClient(facturaForm['address2'].id, MessageHelper.messages["ERROR_HouseNumNumeric"]); 
+			return false;
+		}
+		
+		//Comuna Validation in Factura: Requirement Id 203
+		if(facturaForm['city'].value =="" ||  facturaForm['city'].value =="Selecciona una comuna")
+	    {
+			MessageHelper.formErrorHandleClient(facturaForm['city'].id,MessageHelper.messages["ERROR_ComunaEmpty"]); 
+			return;
+		}
+		
+		if(facturaForm['telefono1'].value == "" || reWhiteSpace.test(facturaForm['telefono1'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['telefono1'].id, MessageHelper.messages["BILLING_FACTURA_EMPTY_TELEFONO"]);
+			return false;
+		}
+		if(!MessageHelper.IsValidPhone(facturaForm['telefono1'].value)){
+			MessageHelper.formErrorHandleClient(facturaForm['telefono1'].id, MessageHelper.messages["ERROR_INVALIDPHONE"]);
+			return false;
+		}
+		if(facturaForm['contacto'].value == "" || reWhiteSpace.test(facturaForm['contacto'].value)){ 
+			MessageHelper.formErrorHandleClient(facturaForm['contacto'].id, MessageHelper.messages["BILLING_FACTURA_EMPTY_CONTACTO"]);
+			return false;
+		}
+		isValid = this.validateAccentedCharacters(facturaForm['contacto'].value,specialCharactersRegex3);
+	    if(facturaForm['contacto'] != null && !isValid){
+			MessageHelper.formErrorHandleClient(facturaForm['contacto'].id,MessageHelper.messages["ERROR_INVALID_CONTACTO"]); 
+			return;
+		}
+		return true;
+	},
+	
+	/**
+	 * Saves the values submitted by the user in the Empressa modal.
+	 * @param {string} Name of the Empressa form.
+	 */
+	saveFactura:function(facturaFormName) {
+		var facturaForm = document.forms[facturaFormName];
+		if(!this.isValidFacturaForm(facturaForm)) {
+			return false;
+		}
+		var params = [];
+		params.storeId = CheckoutHelperJS.storeId;
+		params.catalogId = CheckoutHelperJS.catalogId;
+		params.langId = CheckoutHelperJS.langId;
+		params.organizationName = facturaForm.empresa.value;
+		params.billingCode = formatRut(facturaForm.rut.value);
+		params.officeAddress = facturaForm.razonsocial.value;
+		params.address1 = facturaForm.direccion.value
+		params.address2 = facturaForm.address2.value;
+		params.address3 = facturaForm.giro.value;
+		params.state = facturaForm.region.value;
+		params.city = facturaForm.city.value
+		params.phone1 = facturaForm.telefono1.value;
+		params.phone2 = facturaForm.telefono2.value
+		params.firstName = facturaForm.contacto.value;
+		params.authToken = facturaForm.authToken.value;
+		params.addressField2 = facturaForm.addressField2.value;
+		params.addressType = "F";
+		
+		/* For Handling multiple clicks */
+		if(!submitRequest()){
+			return;
+		}   	 	
+	 	cursor_wait();
+	 	wc.service.invoke("AjaxFacturaAdd", params);
+	},
+	
+	updateFactura:function(addressId) {
+		var facturaOrderIdField = document.getElementById('facturaOrderId');
+		var params = [];
+		params.storeId = CheckoutHelperJS.storeId;
+		params.catalogId = CheckoutHelperJS.catalogId;
+		params.langId = CheckoutHelperJS.langId;
+		params.orderId = facturaOrderIdField.value;
+		params.facturaAddressId = addressId;
+		
+	 	wc.service.invoke("AjaxCENOrderUpdateService", params);
+	},
+	
+	returnToBoleta:function() {
+		var facturaOrderIdField = document.getElementById('facturaOrderId');
+		var params = [];
+		params.storeId = CheckoutHelperJS.storeId;
+		params.catalogId = CheckoutHelperJS.catalogId;
+		params.langId = CheckoutHelperJS.langId;
+		params.orderId = facturaOrderIdField.value;
+		
+	 	wc.service.invoke("AjaxCENOrderUpdateService", params);
+	},
+	
+	refreshFacturaForm:function(facturaSelectBox) {
+		var addressId = "";
+		if(facturaSelectBox.value != 'select') {
+			addressId = facturaSelectBox.value;
+		}
+		cursor_wait();
+		wc.render.updateContext( "FacturaForm_Context", {selectedFacturaAddressId:addressId});
+	},
+	
+	updateModalHeader:function(msg) {		
+		if((document.getElementById("my_address_modal")) && (trim(msg)!="")){
+			document.getElementById("my_address_modal").innerHTML = "<h1>"+msg+"</h1>";
+		}
+	},
+	
+	showDespachoModal:function(div_show){
+		var containerNode = dojo.byId(div_show);
+		var modal = dojo.byId("DespachoContainer");
+		containerNode.style.display ="block";
+	},
+	/*MHTN:Click and Collect-Hiding error message div during popup close*/	
+	hideDespachoModal:function(div_show){
+		var containerNode = dojo.byId(div_show);
+		var modal = dojo.byId("DespachoContainer");
+		containerNode.style.display ="none";
+		document.getElementById("errorMessage").style.display = "none";
+		document.getElementById("despatchoCost").style.display = "none";
+		
+	},
+	/*Req.397 MapCity Improve Show Suggest Streets*/
+	checkEnterEvent: function(e, elementName) {
+	    if (e.keyCode == 13  && elementName) {
+	    	var currSearchTerm = dojo.trim(this.findElementsForMapCity(elementName).value);
+	    	if(currSearchTerm.length > 0){
+		        dojo.cookie('searchStreetValue', dojo.trim(this.findElementsForMapCity(elementName).value), {path:'/'});
+		        return true;
+	        }else{
+	        	return false;
+	        }
+	    }else{
+	    	
+	    	return e.keyCode!=13;
+	    }
+	},
+	/*Req.397 MapCity Improve Show Suggest Streets*/
+	fillSearchField: function (elementName, postFix) {
+		var element = this.findElementsForMapCity(elementName);
+		if(element){
+			if (element.value == "") {
+				element.value = document.getElementById("searchTextHolder"+(postFix?postFix:"")).innerHTML;
+				if (dojo.trim(element.value) == "") {
+					this.enableAddressFormElements(true, true, '');
+				}
+			}else if(dojo.trim(element.value).length >= 2){
+				this.enableAddressFormElements(true, null, 'T');
+			}
+			// hide the search box results
+			if(!autoSuggestStreetHover) {
+				this.showAutoSuggest(false, postFix);
+			}
+		}
+	},
+	/*Req.397 MapCity Improve Show Suggest Streets*/
+	showAutoSuggest: function (display, postFix) {
+		var temp = postFix? postFix : "";
+		var autoSuggest_Result_div = document.getElementById("autoSuggest_Result_div"+temp);
+		if (dojo.isIE < 7){
+			var autoSuggest_content_div = document.getElementById("autoSuggest_content_div"+temp);
+			var autoSuggestDropDownIFrame = document.getElementById("autoSuggestDropDownIFrame"+temp);
+		}
+		
+		if(autoSuggest_Result_div != null && autoSuggest_Result_div != 'undefined') {
+			if(display) {
+				autoSuggest_Result_div.style.display = "block";
+				if (dojo.isIE < 7) {
+					autoSuggestDropDownIFrame.style.height = autoSuggest_content_div.scrollHeight;
+					autoSuggestDropDownIFrame.style.display = "block";
+				}
+			}
+			else {
+				if (dojo.isIE < 7) {
+					autoSuggestDropDownIFrame.style.display = "none";
+					autoSuggestDropDownIFrame.style.height = 0;
+				}
+				autoSuggest_Result_div.style.display = "none";
+			}
+		}
+	},
+	enableAutoSelect: function (index, postFix) {
+		this.highLightSelection(false, autoStreetSelectOption, postFix);
+		//'autoSelectOption_'+postFix+selectionOffset
+		var item = dojo.byId('autoSelectOption_'+(postFix?postFix:"") + index);
+		if(item)
+			item.className = "autoSuggestSelected";
+		autoStreetSelectOption = index;
+	},
+	resetAutoSuggestKeyword: function (elementBox, postFix) {
+		var originalKeyedSearchTerm = document.getElementById("autoSuggestOriginalTerm"+(postFix?postFix:""));
+		if(originalKeyedSearchTerm != null && originalKeyedSearchTerm != 'undefined') {
+			var searchBox = elementBox;
+			searchBox.value = originalKeyedSearchTerm.value;
+			autoSuggestStreetPreviousTerm = originalKeyedSearchTerm.value;
+		}
+	},
+	selectAutoSuggest: function (elementName, term, postFix) {
+		var address1Box = this.findElementsForMapCity(elementName);
+		address1Box.value = term;
+		address1Box.focus();
+		autoSuggestStreetPreviousTerm = term;		
+		this.showAutoSuggest(false, postFix);
+	},
+	clearAutoSuggestResults: function (postFix) {	
+		autoSuggestStreetPreviousTerm = "";
+		autoSuggestStreetURL = "";
+		// clear the dynamic search results;
+		var elemParent = dojo.byId('autoSuggestRootContentResult'+postFix);
+		if(elemParent) 
+			elemParent.innerHTML = "";
+		this.showAutoSuggest(false, postFix);
+	},
+	doStaticAutoSuggest: function (searchTerm, postFix) {
+		return false;
+	},
+	/**/
+	showAutoSuggestIfResults: function (elementName, postFix) {
+		if(dojo.trim(this.findElementsForMapCity(elementName).value).length <= AUTOSUGGEST_THRESHOLD) {
+			this.showAutoSuggest(false, postFix);
+		}
+		else {
+			this.showAutoSuggest(true, postFix);
+		}
+	},
+	/*Req.397 MapCity Improve Show Suggest Streets*/
+	doDynamicAutoSuggest: function (url, searchTerm, postFix) {		
+		// if pending autosuggest triggered, cancel it.
+		if(autoSuggestStreetTimer != -1) {
+			clearTimeout(autoSuggestStreetTimer);
+			autoSuggestStreetTimer = -1;
+		}
+		if(searchTerm){
+//			searchTerm = "?calle="+searchTerm;
+			searchTerm = "&calle="+searchTerm;
+		}
+		// call the auto suggest
+		autoSuggestStreetTimer = setTimeout(function() {
+//			var controller = wc.render.getRefreshControllerById("AutoSuggestStreetsDisplayController");
+//			controller.url = url + "&direccion=" + escape(searchTerm) + "&param1=" + postFix + "&service=GET_STREETS_LIST";
+//			controller.postFix = postFix;
+//			wc.render.updateContext("AutoSuggestStreets_Context", {});
+			var urlParams = {direccion: escape(searchTerm),param1: postFix, service: "GET_STREETS_LIST"};
+			AddressHelper.autoSuggestStreetsSerializeView(url, urlParams, AddressHelper);
+			autoSuggestStreetTimer = -1;
+		}, autoSuggestStreetKeystrokeDelay);
+	},
+	/**
+	* This function retrieves all the required data for cart view event, and then publishes a  view event with the retrieved data
+	*			  
+	* @param {String} jsonViewName name of the view that will be called to get Coremetrics event data
+	* @param {String} urlParams  The URL parameters passed to the jsonViewName when it is be called.For example: {storeId: 0, shopperStoreId: 10001}
+	* @param {object} publisher  A function that takes a single parameter. The parameter will be the
+	*                            retrieved data. It is up to this function to decide if a Coremetrics view
+	*                            will be published. This function will be invoked under the context of this object. For example: function(data){this.publishTopic("/wc/analytics/cartview", data);}
+	**/
+	autoSuggestStreetsSerializeView: function(jsonViewName, urlParams, drawer){
+		
+		var scope = this;
+		setCurrentId(this.findElementsForMapCity('address1').id);
+		requestSubmitted = true;			
+		cursor_wait();
+		var kw = {
+			url:        jsonViewName, 
+			encoding:	'utf-8',
+			handleAs: 	'text',
+			content:    urlParams, 
+			error:      function(type, errObj){
+							// Hidden tags should not interrupt user interactions. Therefore, no error will be reported to user.
+							console.debug("MAPCITY type > ",type);
+							console.debug("MAPCITY errObj > ",errObj);
+							cursor_clear();
+						},
+			load:		function(data, ioArgs){
+							drawer.suggestStreetsResult(data);
+							cursor_clear();
+						}
+		};
+		dojo.xhrPost(kw);
+	},
+	suggestStreetsResult: function(data, ioArgs){
+		console.debug("data > ",data);
+		data += "";
+		data = data.replace('/*',"");
+		data = data.replace('*/',"");
+		try{
+			data = JSON.parse(data, true);
+			data.jsonRespone = data.jsonRespone? JSON.parse(data.jsonRespone, true) : null;
+		}catch(ex){
+			//console.error("Error in the JSON parse", ex);
+		}
+		console.debug("data pre-processed > ",data);		
+		if(data instanceof Object && data.jsonRespone){			
+			var postFix = data.param1? data.param1 : "";
+			var term = data.direccion? data.direccion : "";
+			var elemParent = dojo.byId('autoSuggestRootContentResult'+postFix);
+			if(elemParent) 
+				elemParent.innerHTML = "";
+			if(term.length > 0){
+				var opciones = data.jsonRespone.opciones? data.jsonRespone.opciones : [];				
+				if (opciones != null && opciones instanceof Array && opciones.length > 0) {
+					var total = opciones.length;
+					total = total > TOTAL_STREETS_SUGGESTED ? TOTAL_STREETS_SUGGESTED : total;
+					//'autoSuggestRootContentResult'+postFix 
+					var rootElement = dojo.create("div", {id: "suggestedKeywordResults"+postFix 
+								,"class":"results" , }, elemParent);
+					var ul = dojo.create("ul", null, rootElement);
+					var selectionOffset = 0;
+					var lowerCaseTerm = term.toLowerCase();
+					var termLength = term.length;
+					// display keyword matches from the server
+					for (var index = 0; index < total; index++) {
+						var theTerm = opciones[index];
+						var lowerResponseTerm = theTerm.toLowerCase();
+						var termIndex = lowerResponseTerm.indexOf(lowerCaseTerm);
+						var li = dojo.create("li",{id:'suggestionItem_'+postFix+selectionOffset
+											,role:'listitem' ,tabindex:'-1'} ,ul);
+						/*dojo.create("a", {role:'listitem' ,href:'#' ,onmouseout:'this.className=\"\"' 
+											,onmouseover:'javascript:AddressHelper.enableAutoSelect('+selectionOffset+');'
+											,onclick:'javascript:AddressHelper.selectAutoSuggest("address1",this.title,"'+postFix+'"); return false;'
+											,title: theTerm ,id: 'autoSelectOption_'+postFix+selectionOffset
+											,innerHTML: theTerm.substring(0, termIndex)+"<strong>"
+												+theTerm.substring(termIndex, termLength)+"</strong>"
+												+theTerm.substring(termIndex + termLength)
+										  }, li);*/
+						dojo.create("a", {role:'listitem' ,href:'#' ,onmouseout:'this.className=\"\"' 
+							,onmouseover:'javascript:AddressHelper.enableAutoSelect('+selectionOffset+');'
+							,onclick:'javascript:AddressHelper.selectAutoSuggest("address1",this.title,"'+postFix+'"); return false;'
+							,title: theTerm ,id: 'autoSelectOption_'+postFix+selectionOffset
+							,innerHTML: theTerm.substring(0, termIndex)+"<strong>"
+							+theTerm.substring(termIndex,termIndex+termLength)+"</strong>"
+							+theTerm.substring(termIndex + termLength,termIndex.length)
+						  }, li);
+						
+						
+						selectionOffset++;
+					}
+					// record the original keyed in search term
+					dojo.create("input",{type:'hidden' ,id:'autoSuggestOriginalTerm'+postFix
+										,value:term},ul);
+					dojo.create("input",{type:'hidden' ,id:'dynamicAutoSuggestTotalResults'+postFix
+										,value:selectionOffset},ul);
+					this.showAutoSuggestIfResults('address1', postFix);
+				}
+			}
+		}	
+	},
+	/*Req.397 MapCity Improve Show Suggest Streets*/
+	doAutoSuggest: function (event, url, elementBox, postFix) {
+		// Do only if mapcity flag enabled.
+		if (!(typeof mapcityEnabled === 'undefined') && mapcityEnabled) {
+		
+			if(dojo.trim(elementBox.value).length <= AUTOSUGGEST_THRESHOLD ) {
+				this.showAutoSuggest(false, postFix);
+			}
+	
+			if(event.keyCode == dojo.keys.ENTER) {
+				this.showAutoSuggest(false, postFix);
+				this.findElementsForMapCity('address2').focus();
+				return;
+			}
+	
+			if(event.keyCode == dojo.keys.TAB) {
+				autoSuggestStreetHover = true;
+				this.findElementsForMapCity('address2').focus();
+				return;
+			}
+	
+			if(event.keyCode == dojo.keys.ESCAPE) {
+				this.showAutoSuggest(false, postFix);
+				return;
+			}
+	
+			if(event.keyCode == dojo.keys.UP_ARROW) {
+				var totalDynamicResults = document.getElementById("dynamicAutoSuggestTotalResults"+postFix);
+				if(this.highLightSelection(true, autoStreetSelectOption-1, elementBox , postFix)) {
+					this.highLightSelection(false, autoStreetSelectOption, elementBox , postFix);
+					if(autoStreetSelectOption == historyStreetIndex) {
+						this.resetAutoSuggestKeyword(elementBox, postFix);
+					}
+					autoStreetSelectOption--;
+				}
+				else if(autoStreetSelectOption == CACHED_AUTOSUGGEST_OFFSET && totalDynamicResults != null && totalDynamicResults != 'undefined') {
+					this.highLightSelection(false, CACHED_AUTOSUGGEST_OFFSET, elementBox , postFix);		
+					autoStreetSelectOption = totalDynamicResults.value-1;
+					this.highLightSelection(true, autoStreetSelectOption, elementBox , postFix);
+				}
+				else {
+					// up arrow back to the very top
+					this.highLightSelection(false, autoStreetSelectOption, elementBox , postFix);
+					autoStreetSelectOption = -1;
+					var originalKeyedSearchTerm = document.getElementById("autoSuggestOriginalTerm"+(postFix?postFix:""));
+					this.resetAutoSuggestKeyword(elementBox, postFix);
+				}
+				return;
+			}
+	
+			if(event.keyCode == dojo.keys.DOWN_ARROW) {
+				if(this.highLightSelection(true, autoStreetSelectOption+1, elementBox , postFix)) {
+					this.highLightSelection(false, autoStreetSelectOption, elementBox , postFix);
+					autoStreetSelectOption++;
+				}
+				else if(autoStreetSelectOption < CACHED_AUTOSUGGEST_OFFSET && this.highLightSelection(true, CACHED_AUTOSUGGEST_OFFSET)) {
+					// down arrow into the cached autosuggest section
+					this.highLightSelection(false, autoStreetSelectOption, elementBox , postFix);
+					autoStreetSelectOption = CACHED_AUTOSUGGEST_OFFSET;
+					this.resetAutoSuggestKeyword(elementBox, postFix);
+				}
+				return;
+			}
+	
+			if(dojo.trim(elementBox.value).length > AUTOSUGGEST_THRESHOLD && dojo.trim(elementBox.value) == autoSuggestStreetPreviousTerm) {
+				return;
+			}
+			else {
+				autoSuggestStreetPreviousTerm = dojo.trim(elementBox.value);
+			}
+	
+			if(dojo.trim(elementBox.value).length <= AUTOSUGGEST_THRESHOLD) {
+				return;
+			};
+	
+			// cancel the dynamic search if one is pending
+			if(autoSuggestStreetTimer != -1) {
+				clearTimeout(autoSuggestStreetTimer);
+				autoSuggestStreetTimer = -1;
+			}
+	
+			if(dojo.trim(elementBox.value) != "") {
+				autoStreetSelectOption = -1;
+				//var hasResults = this.doStaticAutoSuggest(elementBox.value);
+				if(dojo.trim(elementBox.value).length > DYNAMIC_AUTOSUGGEST_THRESHOLD) {
+					var showHeader = true; // hasResults;
+					this.doDynamicAutoSuggest(url, elementBox.value, postFix);
+				}
+				else {
+					// clear the dynamic results
+					document.getElementById("autoSuggestDynamic_Result_div"+(postFix?postFix:"")).innerHTML = "";
+				}
+			}
+			else {
+				this.clearAutoSuggestResults(postFix);
+			}
+		}
+	},
+	/*Req.397 MapCity Improve Show Suggest Streets*/
+	highLightSelection: function (state, index, elementBox, postFix) {
+		var temp = postFix? postFix : "";
+		var selection = document.getElementById("autoSelectOption_"+ temp + index);
+		if(selection != null && selection != 'undefined') {
+			if(state) {
+				selection.className = "autoSuggestSelected";
+				var searchBox = elementBox;
+				searchBox.setAttribute("aria-activedescendant", "suggestionItem_"+ temp + index);
+				var totalDynamicResults = document.getElementById("dynamicAutoSuggestTotalResults"+ temp);
+				if((totalDynamicResults != null && totalDynamicResults != 'undefined' && index < totalDynamicResults.value) || (index >= historyIndex)) {
+					searchBox.value = selection.title;
+					autoSuggestPreviousTerm = selection.title;
+					autoSuggestURL = "";
+				}
+				else {
+					autoSuggestURL = selection.href;
+				}
+			}
+			else {
+				selection.className = "";
+			}
+			return true;
+		}
+		else {
+			return false;
+		}
+	},
+	/*REQ:444 New guest shipping flow*/
+	hideNoviosAddressRefreshArea : function(){
+		dojo.byId('noviosAddressDisplayArea').innerHTML = "";
+		dojo.byId('WC_UnregisteredCheckout_div_23').style.display = "block";			
+		dojo.byId('noviosLogo').style.display = "block";	
+		this.checkoutNovios = false;
+		this.noviosChanged = true;
+	}
+}
